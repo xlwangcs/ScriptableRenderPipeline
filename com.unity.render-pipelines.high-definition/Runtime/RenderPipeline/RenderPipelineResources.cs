@@ -225,6 +225,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public RaytracingShader reflectionRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingIndirectDiffuse.raytrace")]
             public RaytracingShader indirectDiffuseRaytracing;
+            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAccumulation.compute")]
+            public ComputeShader indirectDiffuseAccumulation;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAreaShadows.raytrace")]
             public RaytracingShader shadowsRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingFlagMask.raytrace")]
