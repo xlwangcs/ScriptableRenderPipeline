@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Better Handling of Null or Missing Parameter Binders (Editor + Runtime)
 - Fix unexpected issue when plugging per particle data into hash of per component fixed random
+- Missing asset reimport when exception has been thrown during graph compilation
 
 ## [4.10.0-preview] - 2019-02-16
 ### Fixed
