@@ -219,8 +219,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
 #if ENABLE_RAYTRACING
             // Raytracing shaders
-            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAmbientOcclusion.raytrace")]
-            public RaytracingShader aoRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingReflections.raytrace")]
             public RaytracingShader reflectionRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingIndirectDiffuse.raytrace")]
@@ -235,8 +233,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public RaytracingShader forwardRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/AreaBilateralShadow.compute")]
             public ComputeShader areaBillateralFilterCS;
-            [Reload("RenderPipeline/Raytracing/Shaders/JointBilateralFilter.compute")]
-            public ComputeShader jointBilateralFilterCS;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingReflectionFilter.compute")]
             public ComputeShader reflectionBilateralFilterCS;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingLightCluster.compute")]
@@ -245,6 +241,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public ComputeShader lightClusterDebugCS;
             [Reload("RenderPipeline/Raytracing/Shaders/CountTracedRays.compute")]
             public ComputeShader countTracedRays;
+
+            // Ambient Occlusion
+            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAmbientOcclusion.raytrace")]
+            public RaytracingShader aoRaytracing;
+            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAmbientOcclusionFilter.compute")]
+            public ComputeShader raytracingAOFilterCS;
 #endif
         }
 
