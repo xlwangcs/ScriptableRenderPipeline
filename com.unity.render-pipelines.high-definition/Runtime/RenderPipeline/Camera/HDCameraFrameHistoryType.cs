@@ -10,6 +10,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         Normal,
         Depth,
 #if ENABLE_RAYTRACING
+        RaytracedAreaShadow,
         RaytracedReflection,
 #endif
         Count
