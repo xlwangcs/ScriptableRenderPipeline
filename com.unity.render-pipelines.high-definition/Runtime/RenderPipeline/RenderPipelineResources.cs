@@ -221,10 +221,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // Raytracing shaders
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingReflections.raytrace")]
             public RaytracingShader reflectionRaytracing;
-            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingIndirectDiffuse.raytrace")]
-            public RaytracingShader indirectDiffuseRaytracing;
-            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAccumulation.compute")]
-            public ComputeShader indirectDiffuseAccumulation;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAreaShadows.raytrace")]
             public RaytracingShader shadowsRaytracing;
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingFlagMask.raytrace")]
@@ -241,6 +237,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public ComputeShader lightClusterDebugCS;
             [Reload("RenderPipeline/Raytracing/Shaders/CountTracedRays.compute")]
             public ComputeShader countTracedRays;
+
+            // Indirect Diffuse
+            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingIndirectDiffuse.raytrace")]
+            public RaytracingShader indirectDiffuseRaytracing;
+            [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAccumulation.compute")]
+            public ComputeShader indirectDiffuseAccumulation;            
 
             // Ambient Occlusion
             [Reload("RenderPipeline/Raytracing/Shaders/RaytracingAmbientOcclusion.raytrace")]
