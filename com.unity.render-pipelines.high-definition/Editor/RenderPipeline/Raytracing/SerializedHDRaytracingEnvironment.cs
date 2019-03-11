@@ -62,6 +62,8 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
         public SerializedProperty indirectDiffuseNumSamples;
         public SerializedProperty indirectDiffuseRayLength;
         public SerializedProperty indirectDiffuseClampValue;
+        public SerializedProperty indirectDiffuseFilterMode;
+        public SerializedProperty indirectDiffuseFilterRadius;
 
         public SerializedHDRaytracingEnvironment(HDRaytracingEnvironment rtEnv)
         {
@@ -118,6 +120,8 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             indirectDiffuseNumSamples = o.Find(x => x.indirectDiffuseNumSamples);
             indirectDiffuseRayLength = o.Find(x => x.indirectDiffuseRayLength);
             indirectDiffuseClampValue = o.Find(x => x.indirectDiffuseClampValue);
+            indirectDiffuseFilterMode = o.Find(x => x.indirectDiffuseFilterMode);
+            indirectDiffuseFilterRadius = o.Find(x => x.indirectDiffuseFilterRadius);
         }
 
         public void Update()
