@@ -53,7 +53,6 @@ int                         _RaytracingDenoiseRadius;
 [numthreads(RAYTRACING_REFLECTION_TILE_SIZE, RAYTRACING_REFLECTION_TILE_SIZE, 1)]
 void RaytracingReflectionFilter(uint3 dispatchThreadId : SV_DispatchThreadID, uint2 groupThreadId : SV_GroupThreadID, uint2 groupId : SV_GroupID)
 {
-
     uint2 fullResCoord = dispatchThreadId.xy;
     uint2 halfResCoord = fullResCoord / 2;
 
@@ -200,7 +199,6 @@ void TemporalAccumulationFilter(uint2 groupThreadId : SV_GroupThreadID, uint2 gr
 {
     // Fetch the current pixel coordinate
     uint2 currentCoord = groupId * RAYTRACING_REFLECTION_TILE_SIZE + groupThreadId;
-    currentCoord.x = currentCoord.x + (unity_StereoEyeIndex * _ScreenSize.x);
 
     // Fetch the previous color
     float3 previousColor = _AccumulatedFrameTexture[currentCoord].xyz;
