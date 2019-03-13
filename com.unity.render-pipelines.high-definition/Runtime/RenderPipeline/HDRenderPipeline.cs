@@ -235,6 +235,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
         }
 
+        // RENDER GRAPH
+        RenderGraph m_RenderGraph = new RenderGraph();
+
         public HDRenderPipeline(HDRenderPipelineAsset asset)
         {
             m_Asset = asset;
@@ -620,7 +623,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 m_Blit.EnableKeyword("DISABLE_TEXTURE2D_X_ARRAY");
                 m_BlitTexArray = CoreUtils.CreateEngineMaterial(m_Asset.renderPipelineResources.shaders.blitPS);
-        }
+            }
         }
 
         void InitializeRenderStateBlocks()
@@ -1509,7 +1512,15 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             ClearBuffers(hdCamera, cmd);
 
-            bool shouldRenderMotionVectorAfterGBuffer = RenderDepthPrepass(cullingResults, hdCamera, renderContext, cmd);
+            bool msaa = hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA);
+            RenderGraphMutableResource depthBuffer = m_RenderGraph.ImportTexture(m_SharedRTManager.GetDepthStencilBuffer(msaa));
+            RenderGraphMutableResource normalBuffer = m_RenderGraph.ImportTexture(m_SharedRTManager.GetNormalBuffer(msaa));
+            RenderGraphMutableResource depthAsColorMSAABuffer = msaa ? m_RenderGraph.ImportTexture(m_SharedRTManager.GetDepthTexture(true)) : new RenderGraphMutableResource();
+
+            bool shouldRenderMotionVectorAfterGBuffer = RenderDepthPrepass(m_RenderGraph, cullingResults, hdCamera, depthBuffer, normalBuffer, depthAsColorMSAABuffer);
+
+            m_RenderGraph.Execute(renderContext, cmd);
+
             if (!shouldRenderMotionVectorAfterGBuffer)
             {
                 // If objects velocity if enabled, this will render the objects with motion vector into the target buffers (in addition to the depth)
@@ -1643,8 +1654,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     else if(rtEnv != null && rtEnv.raytracedObjects)
                     {
                         HDRaytracingLightCluster lightCluster = m_RayTracingManager.RequestLightCluster(rtEnv.raytracedLayerMask);
-                    PushFullScreenDebugTexture(hdCamera, cmd, lightCluster.m_DebugLightClusterTexture, FullScreenDebugMode.LightCluster);
-                }
+                        PushFullScreenDebugTexture(hdCamera, cmd, lightCluster.m_DebugLightClusterTexture, FullScreenDebugMode.LightCluster);
+                    }
                 }
 #endif
                 if (!hdCamera.frameSettings.ContactShadowsRunAsync())
@@ -1807,20 +1818,20 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 #if (ENABLE_RAYTRACING)
                 {
                     {   
-                        HDRaytracingEnvironment rtEnvironement = m_RayTracingManager.CurrentEnvironment();
+                    HDRaytracingEnvironment rtEnvironement = m_RayTracingManager.CurrentEnvironment();
 
-                        if(rtEnvironement != null)
-                        {
-                            HDRaytracingLightCluster lightCluster = m_RayTracingManager.RequestLightCluster(rtEnvironement.reflLayerMask);
-                            cmd.SetGlobalBuffer(HDShaderIDs._RaytracingLightCluster, lightCluster.GetCluster());
-                            cmd.SetGlobalBuffer(HDShaderIDs._LightDatasRT, lightCluster.GetLightDatas());
-                            cmd.SetGlobalVector(HDShaderIDs._MinClusterPos, lightCluster.GetMinClusterPos());
-                            cmd.SetGlobalVector(HDShaderIDs._MaxClusterPos, lightCluster.GetMaxClusterPos());
-                            cmd.SetGlobalInt(HDShaderIDs._LightPerCellCount, rtEnvironement.maxNumLightsPercell);
-                            cmd.SetGlobalInt(HDShaderIDs._PunctualLightCountRT, lightCluster.GetPunctualLightCount());
-                            cmd.SetGlobalInt(HDShaderIDs._AreaLightCountRT, lightCluster.GetAreaLightCount());
+                    if(rtEnvironement != null)
+                    {
+                        HDRaytracingLightCluster lightCluster = m_RayTracingManager.RequestLightCluster(rtEnvironement.reflLayerMask);
+                        cmd.SetGlobalBuffer(HDShaderIDs._RaytracingLightCluster, lightCluster.GetCluster());
+                        cmd.SetGlobalBuffer(HDShaderIDs._LightDatasRT, lightCluster.GetLightDatas());
+                        cmd.SetGlobalVector(HDShaderIDs._MinClusterPos, lightCluster.GetMinClusterPos());
+                        cmd.SetGlobalVector(HDShaderIDs._MaxClusterPos, lightCluster.GetMaxClusterPos());
+                        cmd.SetGlobalInt(HDShaderIDs._LightPerCellCount, rtEnvironement.maxNumLightsPercell);
+                        cmd.SetGlobalInt(HDShaderIDs._PunctualLightCountRT, lightCluster.GetPunctualLightCount());
+                        cmd.SetGlobalInt(HDShaderIDs._AreaLightCountRT, lightCluster.GetAreaLightCount());
                             HDRaytracingLightProbeBakeManager.Bake(hdCamera.camera, cmd);
-                        }
+                    }
                     }
                 }
 #endif
@@ -2415,13 +2426,30 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
         }
 
+        class PrepassData : RenderGraph.RenderPassData
+        {
+            public HDCamera         hdCamera;
+            public CullingResults   cullResult;
+            public bool             excludeMotion;
+            public ShaderTagId[]    firstPassNames;
+            public RenderQueueRange firstPassRenderQueue;
+            public ShaderTagId[]    secondPassNames;
+            public RenderQueueRange secondPassRenderQueue;
+
+            public RenderGraphMutableResource depthBuffer;
+            public RenderGraphMutableResource depthAsColorBuffer;
+            public RenderGraphMutableResource normalBuffer;
+        }
+
         // RenderDepthPrepass render both opaque and opaque alpha tested based on engine configuration.
         // Lit Forward only: We always render all materials
         // Lit Deferred: We always render depth prepass for alpha tested (optimization), other deferred material are render based on engine configuration.
         // Forward opaque with deferred renderer (DepthForwardOnly pass): We always render all materials
         // True is return if motion vector must be render after GBuffer pass
-        bool RenderDepthPrepass(CullingResults cull, HDCamera hdCamera, ScriptableRenderContext renderContext, CommandBuffer cmd)
+        bool RenderDepthPrepass(RenderGraph renderGraph, CullingResults cull, HDCamera hdCamera, RenderGraphMutableResource depthBuffer, RenderGraphMutableResource normalBuffer, RenderGraphMutableResource depthAsColorMSAA)
         {
+
+
             // Guidelines:
             // Lit shader can be in deferred or forward mode. In this case we use "DepthOnly" pass with "GBuffer" or "Forward" pass name
             // Other shader, including unlit are always forward and use "DepthForwardOnly" with "ForwardOnly" pass.
@@ -2443,70 +2471,100 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // Caution: if there is no depth prepass we must render object motion vector after GBuffer pass otherwise some depth only objects can hide objects with motion vector and overwrite depth buffer but not update
             // the motion vector buffer resulting in artifacts
 
+            bool fullDeferredPrepass = hdCamera.frameSettings.IsEnabled(FrameSettingsField.DepthPrepassWithDeferredRendering) || m_DbufferManager.enableDecals;
             // To avoid rendering objects twice (once in the depth pre-pass and once in the motion vector pass when the motion vector pass is enabled) we exclude the objects that have motion vectors.
-            bool excludeMotion = hdCamera.frameSettings.IsEnabled(FrameSettingsField.ObjectMotionVectors);
-            bool shouldRenderMotionVectorAfterGBuffer = false;
+            bool objectMotionEnabled = hdCamera.frameSettings.IsEnabled(FrameSettingsField.ObjectMotionVectors);
+            bool shouldRenderMotionVectorAfterGBuffer = (hdCamera.frameSettings.litShaderMode == LitShaderMode.Deferred) && !fullDeferredPrepass;
+            bool msaa = hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA);
 
             switch (hdCamera.frameSettings.litShaderMode)
             {
                 case LitShaderMode.Forward:
-                    using (new ProfilingSample(cmd, "Depth Prepass (forward)", CustomSamplerId.DepthPrepass.GetSampler()))
                     {
-                        HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetPrepassBuffersRTI(hdCamera.frameSettings), m_SharedRTManager.GetDepthStencilBuffer(hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA)));
+                        using (var builder = renderGraph.AddRenderPass<PrepassData>("Depth Prepass (forward)", out var passData, CustomSamplerId.DepthPrepass.GetSampler()))
+                        {
+                            passData.hdCamera = hdCamera;
+                            passData.cullResult = cull;
+                            passData.excludeMotion = objectMotionEnabled;
+                            passData.firstPassNames = m_DepthOnlyAndDepthForwardOnlyPassNames;
+                            passData.firstPassRenderQueue = HDRenderQueue.k_RenderQueue_AllOpaque;
 
-                        // XRTODO: wait for XR SDK integration and implement custom version in HDUtils with dynamic resolution support
-                        //XRUtils.DrawOcclusionMesh(cmd, hdCamera.camera, hdCamera.camera.stereoEnabled);
+                            passData.depthBuffer = builder.WriteTexture(depthBuffer);
+                            passData.normalBuffer = builder.WriteTexture(normalBuffer);
+                            if (msaa)
+                                passData.depthAsColorBuffer = builder.WriteTexture(depthAsColorMSAA);
+
+                            builder.SetRenderFunc(
+                            (RenderGraph.RenderPassData data, RenderGraphResourceRegistry resources, CommandBuffer cmd, ScriptableRenderContext renderContext) =>
+                    {
+                                PrepassData prepassData = (PrepassData)data;
+                                bool msaaEnabled = prepassData.hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA);
+
+                                var mrt = RenderGraphUtils.GetMRTArray(msaa ? 2 : 1);
+                                mrt[0] = resources.GetTexture(prepassData.normalBuffer);
+                                if (msaa)
+                                    mrt[1] = resources.GetTexture(prepassData.depthAsColorBuffer);
+
+                                HDUtils.SetRenderTarget(cmd, prepassData.hdCamera, mrt, resources.GetTexture(prepassData.depthBuffer));
+                                XRUtils.DrawOcclusionMesh(cmd, prepassData.hdCamera.camera, prepassData.hdCamera.camera.stereoEnabled);
 
                         // Full forward: Output normal buffer for both forward and forwardOnly
                         // Exclude object that render velocity (if motion vector are enabled)
-                        RenderOpaqueRenderList(cull, hdCamera, renderContext, cmd, m_DepthOnlyAndDepthForwardOnlyPassNames, 0, HDRenderQueue.k_RenderQueue_AllOpaque, excludeMotionVector: excludeMotion);
+                                RenderOpaqueRenderList(prepassData.cullResult, prepassData.hdCamera, renderContext, cmd, prepassData.firstPassNames, 0, prepassData.firstPassRenderQueue, excludeMotionVector: prepassData.excludeMotion);
+                            });
+                        }
                     }
                     break;
                 case LitShaderMode.Deferred:
-                    // If we enable DBuffer, we need a full depth prepass
-                    if (hdCamera.frameSettings.IsEnabled(FrameSettingsField.DepthPrepassWithDeferredRendering) || m_DbufferManager.enableDecals)
                     {
-                        using (new ProfilingSample(cmd, m_DbufferManager.enableDecals ? "Depth Prepass (deferred) force by Decals" : "Depth Prepass (deferred)", CustomSamplerId.DepthPrepass.GetSampler()))
+                        string passName = fullDeferredPrepass ? (m_DbufferManager.enableDecals ? "Depth Prepass (deferred) forced by Decals" : "Depth Prepass (deferred)") : "Depth Prepass (deferred incomplete)";
+                        bool excludeMotion = fullDeferredPrepass ? objectMotionEnabled : false;
+
+                        // First deferred alpha tested materials. Alpha tested object have always a prepass even if enableDepthPrepassWithDeferredRendering is disabled
+                        var partialPrepassRenderQueueRange = new RenderQueueRange { lowerBound = (int)RenderQueue.AlphaTest, upperBound = (int)RenderQueue.GeometryLast - 1 };
+
+                        using (var builder = renderGraph.AddRenderPass<PrepassData>(passName, out var passData, CustomSamplerId.DepthPrepass.GetSampler()))
                         {
-                            HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetDepthStencilBuffer());
+                            passData.hdCamera = hdCamera;
+                            passData.cullResult = cull;
+                            passData.excludeMotion = excludeMotion;
+                            passData.firstPassNames = m_DepthOnlyPassNames;
+                            passData.firstPassRenderQueue = fullDeferredPrepass ? HDRenderQueue.k_RenderQueue_AllOpaque : partialPrepassRenderQueueRange;
+                            passData.secondPassNames = m_DepthForwardOnlyPassNames;
+                            passData.secondPassRenderQueue = HDRenderQueue.k_RenderQueue_AllOpaque;
 
-                            // XRTODO: wait for XR SDK integration and implement custom version in HDUtils with dynamic resolution support
-                            //XRUtils.DrawOcclusionMesh(cmd, hdCamera.camera, hdCamera.camera.stereoEnabled);
+                            passData.depthBuffer = builder.WriteTexture(depthBuffer);
+                            passData.normalBuffer = builder.WriteTexture(normalBuffer);
+                            if (msaa)
+                                passData.depthAsColorBuffer = builder.WriteTexture(depthAsColorMSAA);
 
-                            // First deferred material
-                            RenderOpaqueRenderList(cull, hdCamera, renderContext, cmd, m_DepthOnlyPassNames, 0, HDRenderQueue.k_RenderQueue_AllOpaque, excludeMotionVector: excludeMotion);
-
-                            HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetPrepassBuffersRTI(hdCamera.frameSettings), m_SharedRTManager.GetDepthStencilBuffer());
-
-                            // Then forward only material that output normal buffer
-                            RenderOpaqueRenderList(cull, hdCamera, renderContext, cmd, m_DepthForwardOnlyPassNames, 0, HDRenderQueue.k_RenderQueue_AllOpaque, excludeMotionVector: excludeMotion);
-                        }
-                    }
-                    else // Deferred with partial depth prepass
+                            builder.SetRenderFunc(
+                            (RenderGraph.RenderPassData data, RenderGraphResourceRegistry resources, CommandBuffer cmd, ScriptableRenderContext renderContext) =>
                     {
-                        using (new ProfilingSample(cmd, "Depth Prepass (deferred incomplete)", CustomSamplerId.DepthPrepass.GetSampler()))
-                        {
-                            HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetDepthStencilBuffer());
+                                PrepassData prepassData = (PrepassData)data;
+                                bool msaaEnabled = prepassData.hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA);
 
-                            // XRTODO: wait for XR SDK integration and implement custom version in HDUtils with dynamic resolution support
-                            //XRUtils.DrawOcclusionMesh(cmd, hdCamera.camera, hdCamera.camera.stereoEnabled);
+                                // First deferred material
+                                HDUtils.SetRenderTarget(cmd, prepassData.hdCamera, resources.GetTexture(prepassData.depthBuffer));
+                                XRUtils.DrawOcclusionMesh(cmd, prepassData.hdCamera.camera, prepassData.hdCamera.camera.stereoEnabled);
+                                RenderOpaqueRenderList(prepassData.cullResult, prepassData.hdCamera, renderContext, cmd, prepassData.firstPassNames, 0, prepassData.firstPassRenderQueue, excludeMotionVector: prepassData.excludeMotion);
 
-                            // First deferred alpha tested materials. Alpha tested object have always a prepass even if enableDepthPrepassWithDeferredRendering is disabled
-                            var renderQueueRange = new RenderQueueRange { lowerBound = (int)RenderQueue.AlphaTest, upperBound = (int)RenderQueue.GeometryLast - 1 };
-                            RenderOpaqueRenderList(cull, hdCamera, renderContext, cmd, m_DepthOnlyPassNames, 0, renderQueueRange);
+                                // Then forward only material that output normal buffer
+                                var mrt = RenderGraphUtils.GetMRTArray(msaa ? 2 : 1);
+                                mrt[0] = resources.GetTexture(prepassData.normalBuffer);
+                                if (msaa)
+                                    mrt[1] = resources.GetTexture(prepassData.depthAsColorBuffer);
 
-                            HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetPrepassBuffersRTI(hdCamera.frameSettings), m_SharedRTManager.GetDepthStencilBuffer());
-
-                            // Then forward only material that output normal buffer
-                            RenderOpaqueRenderList(cull, hdCamera, renderContext, cmd, m_DepthForwardOnlyPassNames, 0, HDRenderQueue.k_RenderQueue_AllOpaque);
+                                HDUtils.SetRenderTarget(cmd, prepassData.hdCamera, mrt, resources.GetTexture(prepassData.depthBuffer));
+                                RenderOpaqueRenderList(prepassData.cullResult, prepassData.hdCamera, renderContext, cmd, prepassData.secondPassNames, 0, prepassData.secondPassRenderQueue, excludeMotionVector: prepassData.excludeMotion);
+                            });
                         }
-
-                        shouldRenderMotionVectorAfterGBuffer = true;
                     }
                     break;
                 default:
                     throw new ArgumentOutOfRangeException("Unknown ShaderLitMode");
             }
+                //});
 
 #if ENABLE_RAYTRACING
             // If there is a ray-tracing environment and the feature is enabled we want to push these objects to the prepass
@@ -3006,7 +3064,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._SsrLightingTextureRW, m_SsrLightingTexture);
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._ColorPyramidTexture,  previousColorPyramid);
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._SsrClearCoatMaskTexture, clearCoatMask);
-                    
+
                     cmd.SetComputeIntParam(cs, HDShaderIDs._SsrColorPyramidMaxMip, hdCamera.colorPyramidHistoryMipCount - 1);
 
                     cmd.DispatchCompute(cs, kernel, HDUtils.DivRoundUp(w, 8), HDUtils.DivRoundUp(h, 8), XRGraphics.computePassCount);
