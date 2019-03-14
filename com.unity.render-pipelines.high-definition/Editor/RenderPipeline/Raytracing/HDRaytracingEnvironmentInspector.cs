@@ -60,6 +60,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             public static GUIContent shadowSectionText = new GUIContent("Ray-traced Shadows");
             public static GUIContent shadowBilateralRadius = new GUIContent("Shadows Bilateral Radius");
             public static GUIContent shadowNumSamplesText = new GUIContent("Shadows Num Samples");
+            public static GUIContent splitIntegrationText = new GUIContent("Split Integration");
 
             // Shadow Bilateral Filter Data
             public static GUIContent numAreaLightShadows = new GUIContent("Max Num Shadows");
@@ -277,6 +278,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 EditorGUILayout.PropertyField(rtEnv.shadowNumSamples, Styles.shadowNumSamplesText);
                 EditorGUILayout.PropertyField(rtEnv.numAreaLightShadows, Styles.numAreaLightShadows);
                 EditorGUILayout.PropertyField(rtEnv.shadowFilterRadius, Styles.shadowBilateralRadius);
+                EditorGUILayout.PropertyField(rtEnv.splitIntegration, Styles.splitIntegrationText);
             }
         }
 
