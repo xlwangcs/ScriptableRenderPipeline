@@ -564,16 +564,16 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 viewConstants.prevViewProjMatrixNoCameraTrans = gpuNonJitteredProj * noTransViewMatrix;
             }
 
-            // XRTODO: is this different per view? move back to Update() ?
+            // XRTODO: figure out if the following variables must be in ViewConstants
             float n = camera.nearClipPlane;
             float f = camera.farClipPlane;
 
             // Analyze the projection matrix.
             // p[2][3] = (reverseZ ? 1 : -1) * (depth_0_1 ? 1 : 2) * (f * n) / (f - n)
-            float scale     = projMatrix[2, 3] / (f * n) * (f - n);
+            float scale     = viewConstants.projMatrix[2, 3] / (f * n) * (f - n);
             bool  depth_0_1 = Mathf.Abs(scale) < 1.5f;
             bool  reverseZ  = scale > 0;
-            bool  flipProj  = projMatrix.inverse.MultiplyPoint(new Vector3(0, 1, 0)).y < 0;
+            bool  flipProj  = viewConstants.invProjMatrix.MultiplyPoint(new Vector3(0, 1, 0)).y < 0;
 
             // http://www.humus.name/temp/Linearize%20depth.txt
             if (reverseZ)
