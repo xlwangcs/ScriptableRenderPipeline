@@ -76,7 +76,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
                     return 1;
 
-                return Math.Min(1, xrViewCount);
+                return Math.Max(1, xrViewCount);
             }
         }
 
