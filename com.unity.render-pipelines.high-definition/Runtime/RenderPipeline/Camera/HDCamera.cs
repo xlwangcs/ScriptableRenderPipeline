@@ -64,9 +64,21 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         // XR instanced views (hardware-accelerated single-pass instancing or multiview)
         public int xrViewCount = 1;
         public bool xrInstancingEnabled { get { return xrViewCount > 1; } }
-        public int computePassCount { get { return Math.Min(1, xrViewCount); } }
         private ComputeBuffer xrViewConstantsGpu;
         private ViewConstants[] xrViewConstants;
+
+        // 
+        public int computePassCount
+        {
+            get
+            {
+                // XRTODO: double-wide cleanup
+                if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
+                    return 1;
+
+                return Math.Min(1, xrViewCount);
+            }
+        }
 
         // Recorder specific
         IEnumerator<Action<RenderTargetIdentifier, CommandBuffer>> m_RecorderCaptureActions;
@@ -234,6 +246,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             frustumPlaneEquations = new Vector4[6];
 
             if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePassInstanced)
+                xrViewCount = 2;
+
+            // XRTODO: double-wide cleanup
+            if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
                 xrViewCount = 2;
 
             m_AdditionalCameraData = null; // Init in Update
