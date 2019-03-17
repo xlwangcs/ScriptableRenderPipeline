@@ -67,6 +67,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         private ComputeBuffer xrViewConstantsGpu;
         private ViewConstants[] xrViewConstants;
 
+        // XR legacy multipass (will be deprecated by XR SDK in 2019.3)
+        public int xrPassIndex = 0;
+        public bool xrlegacyMultipassEnabled = false;
+        public int xrLegacyMultipassEye { get { return xrPassIndex - 1; } }
+
         // 
         public int computePassCount
         {
@@ -225,8 +230,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             ? m_AdditionalCameraData.probeLayerMask
             : (LayerMask)~0;
 
-        static Dictionary<Camera, HDCamera> s_Cameras = new Dictionary<Camera, HDCamera>();
-        static List<Camera> s_Cleanup = new List<Camera>(); // Recycled to reduce GC pressure
+        static Dictionary<Tuple<Camera, int>, HDCamera> s_Cameras = new Dictionary<Tuple<Camera, int>, HDCamera>();
+        static List<Tuple<Camera, int>> s_Cleanup = new List<Tuple<Camera, int>>(); // Recycled to reduce GC pressure
 
         HDAdditionalCameraData m_AdditionalCameraData;
 
@@ -235,9 +240,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         int numColorPyramidBuffersAllocated = 0;
         int numVolumetricBuffersAllocated   = 0;
 
-        public HDCamera(Camera cam)
+        public HDCamera(Camera cam, int passIndex)
         {
             camera = cam;
+            xrPassIndex = passIndex;
 
             frustum = new Frustum();
             frustum.planes = new Plane[6];
@@ -245,12 +251,23 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             frustumPlaneEquations = new Vector4[6];
 
-            if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePassInstanced)
-                xrViewCount = 2;
-
-            // XRTODO: double-wide cleanup
-            if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
-                xrViewCount = 2;
+            // XR legacy rendering (will de deprecated by XR SDK)
+            if (camera.stereoEnabled)
+            {
+                switch (XRGraphics.stereoRenderingMode)
+                {
+                    case XRGraphics.StereoRenderingMode.MultiPass:
+                        xrlegacyMultipassEnabled = true;
+                        break;
+                    // XRTODO: double-wide cleanup
+                    case XRGraphics.StereoRenderingMode.SinglePass:
+                        xrViewCount = 2;
+                        break;
+                    case XRGraphics.StereoRenderingMode.SinglePassInstanced:
+                        xrViewCount = 2;
+                        break;
+                }
+            }
 
             m_AdditionalCameraData = null; // Init in Update
 
@@ -307,11 +324,22 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
+            void GetLegacyStereoViewParameters(Camera.StereoscopicEye eye, ref Matrix4x4 proj, ref Matrix4x4 view, ref Vector3 cameraPosition)
+            {
+                proj = camera.GetStereoProjectionMatrix(eye);
+                view = camera.GetStereoViewMatrix(eye);
+                cameraPosition = view.inverse.GetColumn(3);
+            }
+
             // Update view constants
             {
                 var proj = camera.projectionMatrix;
                 var view = camera.worldToCameraMatrix;
                 var cameraPosition = camera.transform.position;
+
+                if (xrlegacyMultipassEnabled)
+                    GetLegacyStereoViewParameters((Camera.StereoscopicEye)xrLegacyMultipassEye, ref proj, ref view, ref cameraPosition);
+
                 UpdateViewConstants(ref mainViewConstants, proj, view, cameraPosition);
 
                 if (xrViewConstants == null || xrViewConstants.Length != xrViewCount)
@@ -326,11 +354,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 {
                     for (int xrViewIndex = 0; xrViewIndex < xrViewCount; ++xrViewIndex)
                     {
-                        proj = camera.GetStereoProjectionMatrix((Camera.StereoscopicEye)xrViewIndex);
-                        view = camera.GetStereoViewMatrix((Camera.StereoscopicEye)xrViewIndex);
-                        cameraPosition = view.inverse.GetColumn(3);
-
-                        UpdateViewConstants(ref xrViewConstants[xrViewIndex], proj, view, new Vector3(cameraPosition.x, cameraPosition.y, cameraPosition.z));
+                        GetLegacyStereoViewParameters((Camera.StereoscopicEye)xrViewIndex, ref proj, ref view, ref cameraPosition);
+                        UpdateViewConstants(ref xrViewConstants[xrViewIndex], proj, view, cameraPosition);
 
                         // Compute offset between the main camera and the instanced views
                         xrViewConstants[xrViewIndex].worldSpaceCameraPosViewOffset = xrViewConstants[xrViewIndex].worldSpaceCameraPos - mainViewConstants.worldSpaceCameraPos;
@@ -743,11 +768,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         }
 
         // Will return NULL if the camera does not exist.
-        public static HDCamera Get(Camera camera)
+        public static HDCamera Get(Camera camera, int passIndex)
         {
             HDCamera hdCamera;
 
-            if (!s_Cameras.TryGetValue(camera, out hdCamera))
+            if (!s_Cameras.TryGetValue(new Tuple<Camera, int>(camera, passIndex), out hdCamera))
             {
                 hdCamera = null;
             }
@@ -768,10 +793,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         // Pass all the systems that may want to initialize per-camera data here.
         // That way you will never create an HDCamera and forget to initialize the data.
-        public static HDCamera Create(Camera camera)
+        public static HDCamera Create(Camera camera, int passIndex)
         {
-            HDCamera hdCamera = new HDCamera(camera);
-            s_Cameras.Add(camera, hdCamera);
+            HDCamera hdCamera = new HDCamera(camera, passIndex);
+            s_Cameras.Add(new Tuple<Camera, int>(camera, passIndex), hdCamera);
 
             return hdCamera;
         }
