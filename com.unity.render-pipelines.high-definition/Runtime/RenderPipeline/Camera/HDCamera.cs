@@ -64,21 +64,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         // XR instanced views (hardware-accelerated single-pass instancing or multiview)
         public int xrViewCount = 1;
         public bool xrInstancingEnabled { get { return xrViewCount > 1; } }
-        private ComputeBuffer xrViewConstantsGpu;
-        private ViewConstants[] xrViewConstants;
-
-        // 
-        public int computePassCount
-        {
-            get
-            {
-                // XRTODO: double-wide cleanup
-                if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
-                    return 1;
-
-                return Math.Max(1, xrViewCount);
-            }
-        }
+        ViewConstants[] xrViewConstants;
+        ComputeBuffer   xrViewConstantsGpu;
 
         // Recorder specific
         IEnumerator<Action<RenderTargetIdentifier, CommandBuffer>> m_RecorderCaptureActions;
@@ -146,6 +133,19 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     -1f / p.m23,
                     (-p.m22 + p.m20 * p.m02 / p.m00 + p.m21 * p.m12 / p.m11) / p.m23
                     );
+            }
+        }
+
+        // Helper property to inform how many views are rendered simultaneously 
+        public int computePassCount
+        {
+            get
+            {
+                // XRTODO: double-wide cleanup
+                if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
+                    return 1;
+
+                return Math.Max(1, xrViewCount);
             }
         }
 
@@ -607,7 +607,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             float orthoWidth  = orthoHeight * camera.aspect;
             unity_OrthoParams = new Vector4(orthoWidth, orthoHeight, 0, camera.orthographic ? 1 : 0);
 
-            Frustum.Create(frustum, mainViewConstants.viewProjMatrix, depth_0_1, reverseZ);
+            Frustum.Create(frustum, viewConstants.viewProjMatrix, depth_0_1, reverseZ);
 
             // Left, right, top, bottom, near, far.
             for (int i = 0; i < 6; i++)
@@ -742,6 +742,21 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             isFirstFrame = true;
         }
 
+        public void Dispose()
+        {
+            if (xrViewConstantsGpu != null)
+            {
+                xrViewConstantsGpu.Dispose();
+                xrViewConstantsGpu = null;
+            }
+
+            if (m_HistoryRTSystem != null)
+            {
+                m_HistoryRTSystem.Dispose();
+                m_HistoryRTSystem = null;
+            }
+        }
+
         // Will return NULL if the camera does not exist.
         public static HDCamera Get(Camera camera)
         {
@@ -781,7 +796,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             foreach (var cam in s_Cameras)
             {
                 cam.Value.ReleaseHistoryBuffer();
-                CoreUtils.SafeRelease(cam.Value.xrViewConstantsGpu);
+                cam.Value.Dispose();
             }
 
             s_Cameras.Clear();
@@ -801,13 +816,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             foreach (var cam in s_Cleanup)
             {
-                var hdCam = s_Cameras[cam];
-                if (hdCam.m_HistoryRTSystem != null)
-                {
-                    hdCam.m_HistoryRTSystem.Dispose();
-                    hdCam.m_HistoryRTSystem = null;
-                }
-                CoreUtils.SafeRelease(hdCam.xrViewConstantsGpu);
+                s_Cameras[cam].Dispose();
                 s_Cameras.Remove(cam);
             }
 
