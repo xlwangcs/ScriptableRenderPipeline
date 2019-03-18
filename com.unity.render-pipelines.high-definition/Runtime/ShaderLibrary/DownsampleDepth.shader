@@ -58,7 +58,7 @@
             depths.y = LoadCameraDepth(fullResUpperCorner + uint2(0, 1));
             depths.z = LoadCameraDepth(fullResUpperCorner + uint2(1, 0));
             depths.w = LoadCameraDepth(fullResUpperCorner + uint2(1, 1));
-            outputDepth = 1.0f;
+
         #if MIN_DOWNSAMPLE
             outputDepth = MinDepth(depths);
         #elif CHECKERBOARD_DOWNSAMPLE
