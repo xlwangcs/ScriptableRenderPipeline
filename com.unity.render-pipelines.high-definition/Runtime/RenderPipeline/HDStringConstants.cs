@@ -302,6 +302,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _TextureWidthScaling = Shader.PropertyToID("_TextureWidthScaling"); // (2.0, 0.5) for SinglePassDoubleWide (stereo) and (1.0, 1.0) otherwise
 
         public static readonly int _DepthTexture                   = Shader.PropertyToID("_DepthTexture");
+        public static readonly int _LowResDepthTexture             = Shader.PropertyToID("_LowResDepthTexture");
         public static readonly int _DepthValuesTexture             = Shader.PropertyToID("_DepthValuesTexture");
         public static readonly int _CameraColorTexture             = Shader.PropertyToID("_CameraColorTexture");
         public static readonly int _CameraColorTextureRW           = Shader.PropertyToID("_CameraColorTextureRW");

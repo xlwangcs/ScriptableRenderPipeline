@@ -83,6 +83,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public Shader copyDepthBufferPS;
             [Reload("ShaderLibrary/Blit.shader")]
             public Shader blitPS;
+            [Reload("ShaderLibrary/DownsampleDepth.shader")]
+            public Shader downsampleDepthPS;
 
             // Sky
             [Reload("Sky/BlitCubemap.shader")]
