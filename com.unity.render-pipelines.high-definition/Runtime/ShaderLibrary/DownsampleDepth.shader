@@ -50,7 +50,6 @@
         }
 
         void Frag(Varyings input, out float outputDepth : SV_Depth)
-
         {
             uint2 fullResUpperCorner = uint2(input.positionCS.xy * 2.0);
             float4 depths;

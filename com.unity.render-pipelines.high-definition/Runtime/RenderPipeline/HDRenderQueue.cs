@@ -156,6 +156,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     return RenderQueueType.Transparent;
                 case RenderQueueType.AfterPostProcessOpaque:
                     return RenderQueueType.AfterPostprocessTransparent;
+                case RenderQueueType.LowTransparent:
+                    return RenderQueueType.LowTransparent;
 #if ENABLE_RAYTRACING
                 case RenderQueueType.RaytracingOpaque:
                     return RenderQueueType.RaytracingTransparent;

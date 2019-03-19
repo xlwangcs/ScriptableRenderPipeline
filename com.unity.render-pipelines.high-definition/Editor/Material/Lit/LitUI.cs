@@ -316,7 +316,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             get { return refractionModel == null || refractionModel.floatValue == 0f; }
         }
         protected override bool showAfterPostProcessPass { get { return false; } }
-        protected override bool showLowResolutionPass { get { return false; } }
+        protected override bool showLowResolutionPass { get { return true; } }
 
         protected void FindMaterialLayerProperties(MaterialProperty[] props)
         {

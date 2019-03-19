@@ -1000,7 +1000,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             {
                 result.Add(HDRenderQueue.RenderQueueType.PreRefraction);
                 result.Add(HDRenderQueue.RenderQueueType.Transparent);
-                //result.AddHDRenderQueue.RenderQueueType.LowTransparent):
+                result.Add(HDRenderQueue.RenderQueueType.LowTransparent);
                 if (needAfterPostProcess)
                     result.Add(HDRenderQueue.RenderQueueType.AfterPostprocessTransparent);
 #if ENABLE_RAYTRACING
