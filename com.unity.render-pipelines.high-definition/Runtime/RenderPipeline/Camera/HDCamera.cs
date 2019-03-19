@@ -269,6 +269,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
+            // Sanity check
+            Debug.Assert(xrViewCount <= TextureXR.kMaxSliceCount);
+
             m_AdditionalCameraData = null; // Init in Update
 
             Reset();

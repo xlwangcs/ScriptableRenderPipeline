@@ -2469,7 +2469,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     tileFlagsWritten = true;
                 }
 
-                cmd.DispatchCompute(buildPerTileLightListShader, genListPerTileKernel, numTilesX, numTilesY, XRGraphics.computePassCount);
+                cmd.DispatchCompute(buildPerTileLightListShader, genListPerTileKernel, numTilesX, numTilesY, hdCamera.computePassCount);
             }
 
             // Cluster
@@ -2513,7 +2513,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                     cmd.SetComputeTextureParam(buildMaterialFlagsShader, buildMaterialFlagsKernel, HDShaderIDs._StencilTexture, stencilTextureRT);
 
-                    cmd.DispatchCompute(buildMaterialFlagsShader, buildMaterialFlagsKernel, numTilesX, numTilesY, XRGraphics.computePassCount);
+                    cmd.DispatchCompute(buildMaterialFlagsShader, buildMaterialFlagsKernel, numTilesX, numTilesY, hdCamera.computePassCount);
                 }
 
                 // clear dispatch indirect buffer
@@ -2530,7 +2530,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     cmd.SetComputeBufferParam(buildDispatchIndirectShader, s_BuildDrawInstancedIndirectKernel, HDShaderIDs.g_TileFeatureFlags, s_TileFeatureFlags);
                     cmd.SetComputeIntParam(buildDispatchIndirectShader, HDShaderIDs.g_NumTiles, numTiles);
                     cmd.SetComputeIntParam(buildDispatchIndirectShader, HDShaderIDs.g_NumTilesX, numTilesX);
-                    cmd.DispatchCompute(buildDispatchIndirectShader, s_BuildDrawInstancedIndirectKernel, (numTiles + k_ThreadGroupOptimalSize - 1) / k_ThreadGroupOptimalSize, 1, XRGraphics.computePassCount);
+                    cmd.DispatchCompute(buildDispatchIndirectShader, s_BuildDrawInstancedIndirectKernel, (numTiles + k_ThreadGroupOptimalSize - 1) / k_ThreadGroupOptimalSize, 1, hdCamera.computePassCount);
                 }
                 else
                 {
@@ -2543,7 +2543,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     cmd.SetComputeBufferParam(buildDispatchIndirectShader, s_BuildDispatchIndirectKernel, HDShaderIDs.g_TileFeatureFlags, s_TileFeatureFlags);
                     cmd.SetComputeIntParam(buildDispatchIndirectShader, HDShaderIDs.g_NumTiles, numTiles);
                     cmd.SetComputeIntParam(buildDispatchIndirectShader, HDShaderIDs.g_NumTilesX, numTilesX);
-                    cmd.DispatchCompute(buildDispatchIndirectShader, s_BuildDispatchIndirectKernel, (numTiles + k_ThreadGroupOptimalSize - 1) / k_ThreadGroupOptimalSize, 1, XRGraphics.computePassCount);
+                    cmd.DispatchCompute(buildDispatchIndirectShader, s_BuildDispatchIndirectKernel, (numTiles + k_ThreadGroupOptimalSize - 1) / k_ThreadGroupOptimalSize, 1, hdCamera.computePassCount);
                 }
             }
 
@@ -2738,7 +2738,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 int numTilesX = (hdCamera.actualWidth  + (deferredShadowTileSize - 1)) / deferredShadowTileSize;
                 int numTilesY = (hdCamera.actualHeight + (deferredShadowTileSize - 1)) / deferredShadowTileSize;
 
-                cmd.DispatchCompute(screenSpaceShadowComputeShader, kernel, numTilesX, numTilesY, XRGraphics.computePassCount);
+                cmd.DispatchCompute(screenSpaceShadowComputeShader, kernel, numTilesX, numTilesY, hdCamera.computePassCount);
             }
         }
 
@@ -2820,7 +2820,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         }
                         else
                         {
-                            cmd.DispatchCompute(deferredComputeShader, kernel, numTilesX, numTilesY, XRGraphics.computePassCount);
+                            cmd.DispatchCompute(deferredComputeShader, kernel, numTilesX, numTilesY, hdCamera.computePassCount);
                         }
                     }
                 }

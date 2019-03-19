@@ -631,7 +631,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 int h = (int)resolution.y;
 
                 // The shader defines GROUP_SIZE_1D = 8.
-                cmd.DispatchCompute(m_VolumeVoxelizationCS, kernel, (w + 7) / 8, (h + 7) / 8, XRGraphics.computePassCount);
+                cmd.DispatchCompute(m_VolumeVoxelizationCS, kernel, (w + 7) / 8, (h + 7) / 8, hdCamera.computePassCount);
             }
         }
 
@@ -745,7 +745,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 int h = (int)resolution.y;
 
                 // The shader defines GROUP_SIZE_1D = 8.
-                cmd.DispatchCompute(m_VolumetricLightingCS, kernel, (w + 7) / 8, (h + 7) / 8, XRGraphics.computePassCount);
+                cmd.DispatchCompute(m_VolumetricLightingCS, kernel, (w + 7) / 8, (h + 7) / 8, hdCamera.computePassCount);
             }
         }
     } // class VolumetricLightingModule
