@@ -252,6 +252,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
                 xrViewCount = 2;
 
+            // Sanity check
+            Debug.Assert(xrViewCount <= TextureXR.kMaxSliceCount);
+
             m_AdditionalCameraData = null; // Init in Update
 
             Reset();
