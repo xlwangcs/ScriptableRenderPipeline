@@ -152,7 +152,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         [Flags]
         public enum StencilBitMask
         {
-            Clear                           = 0,    // 0x0 
+            Clear                           = 0,    // 0x0
             LightingMask                    = 3,    // 0x7  - 2 bit - Lifetime: GBuffer/Forward - SSSSS
             // Free slot 4
             // Note: If required, the usage Decals / DecalsForwardOutputNormalBuffer could be fit at same location as LightingMask as they have a non overlapped lifetime
@@ -1000,126 +1000,118 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             using (ListPool<CameraPositionSettings>.Get(out List<CameraPositionSettings> cameraPositionSettings))
 
             {
+                // With XR multi-pass enabled, each camera can be rendered multiple times with different parameters
+                var multipassCameras = MultipassCamera.SetupFrame(cameras);
+
                 // Culling loop
-                foreach (var camera in cameras)
+                foreach(var multipassCamera in multipassCameras)
                 {
+                    var camera = multipassCamera.camera;
                     if (camera == null)
                         continue;
 
-                    int multipassCount = 1;
-                    int multipassFirstIndex = 0;
-                    if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
+                    // TODO: Very weird callbacks
+                    //  They are called at the beginning of a camera render, but the very same camera may not end its rendering
+                    //  for various reasons (full screen pass through, custom render, or just invalid parameters)
+                    //  and in that case the associated ending call is never called.
+                    UnityEngine.Rendering.RenderPipeline.BeginCameraRendering(renderContext, camera);
+                    UnityEngine.Experimental.VFX.VFXManager.ProcessCamera(camera); //Visual Effect Graph is not yet a required package but calling this method when there isn't any VisualEffect component has no effect (but needed for Camera sorting in Visual Effect Graph context)
+
+                    // Reset pooled variables
+                    cameraSettings.Clear();
+                    cameraPositionSettings.Clear();
+
+                    var cullingResults = GenericPool<HDCullingResults>.Get();
+                    cullingResults.Reset();
+
+                    // Try to compute the parameters of the request or skip the request
+                    var skipRequest = !(TryCalculateFrameParameters(
+                            multipassCamera,
+                            out var additionalCameraData,
+                            out var hdCamera,
+                            out var cullingParameters
+                        )
+                        // Note: In case of a custom render, we have false here and 'TryCull' is not executed
+                        && TryCull(
+                            camera, hdCamera, renderContext, cullingParameters,
+                            ref cullingResults
+                        ));
+
+                    if (additionalCameraData != null && additionalCameraData.hasCustomRender)
                     {
-                        multipassCount = 2;
-                        multipassFirstIndex = 1;
+                        skipRequest = true;
+                        // Execute custom render
+                        additionalCameraData.ExecuteCustomRender(renderContext, hdCamera);
                     }
 
-                    for (int multipassIndex = 0; multipassIndex < multipassCount; multipassIndex++)
+                    if (skipRequest)
                     {
-                        // TODO: Very weird callbacks
-                        //  They are called at the beginning of a camera render, but the very same camera may not end its rendering
-                        //  for various reasons (full screen pass through, custom render, or just invalid parameters)
-                        //  and in that case the associated ending call is never called.
-                        UnityEngine.Rendering.RenderPipeline.BeginCameraRendering(renderContext, camera);
-                        UnityEngine.Experimental.VFX.VFXManager.ProcessCamera(camera); //Visual Effect Graph is not yet a required package but calling this method when there isn't any VisualEffect component has no effect (but needed for Camera sorting in Visual Effect Graph context)
-
-                        // Reset pooled variables
-                        cameraSettings.Clear();
-                        cameraPositionSettings.Clear();
-
-                        var cullingResults = GenericPool<HDCullingResults>.Get();
-                        cullingResults.Reset();
-
-                        // Try to compute the parameters of the request or skip the request
-                        var skipRequest = !(TryCalculateFrameParameters(
-                                camera,
-                                xrPassIndex: multipassIndex + multipassFirstIndex,
-                                out var additionalCameraData,
-                                out var hdCamera,
-                                out var cullingParameters
-                            )
-                            // Note: In case of a custom render, we have false here and 'TryCull' is not executed
-                            && TryCull(
-                                camera, hdCamera, renderContext, cullingParameters,
-                                ref cullingResults
-                            ));
-
-                        if (additionalCameraData != null && additionalCameraData.hasCustomRender)
-                        {
-                            skipRequest = true;
-                            // Execute custom render
-                            additionalCameraData.ExecuteCustomRender(renderContext, hdCamera);
-                        }
-
-                        if (skipRequest)
-                        {
-                            // Submit render context and free pooled resources for this request
-                            renderContext.Submit();
-                            GenericPool<HDCullingResults>.Release(cullingResults);
-                            UnityEngine.Rendering.RenderPipeline.EndCameraRendering(renderContext, camera);
-                            continue;
-                        }
-
-                        // Add render request
-                        var request = new RenderRequest
-                        {
-                            hdCamera = hdCamera,
-                            cullingResults = cullingResults,
-                            target = new RenderRequest.Target
-                            {
-                                id = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget),
-                                face = CubemapFace.Unknown
-                            },
-                            dependsOnRenderRequestIndices = ListPool<int>.Get(),
-                            index = renderRequests.Count,
-                            cameraSettings = CameraSettings.From(hdCamera)
-                            // TODO: store DecalCullResult
-                        };
-                        renderRequests.Add(request);
-                        // This is a root render request
-                        rootRenderRequestIndices.Add(request.index);
-
-                        // Add visible probes to list
-                        for (var i = 0; i < cullingResults.cullingResults.visibleReflectionProbes.Length; ++i)
-                        {
-                            var visibleProbe = cullingResults.cullingResults.visibleReflectionProbes[i];
-
-                            // TODO: The following fix is temporary.
-                            // We should investigate why we got null cull result when we change scene
-                            if (visibleProbe == null || visibleProbe.Equals(null) || visibleProbe.reflectionProbe == null || visibleProbe.reflectionProbe.Equals(null))
-                                continue;
-
-                            var additionalReflectionData =
-                                visibleProbe.reflectionProbe.GetComponent<HDAdditionalReflectionData>()
-                                ?? visibleProbe.reflectionProbe.gameObject.AddComponent<HDAdditionalReflectionData>();
-
-                            AddVisibleProbeVisibleIndexIfUpdateIsRequired(additionalReflectionData, request.index);
-                        }
-                        for (var i = 0; i < cullingResults.hdProbeCullingResults.visibleProbes.Count; ++i)
-                            AddVisibleProbeVisibleIndexIfUpdateIsRequired(cullingResults.hdProbeCullingResults.visibleProbes[i], request.index);
-
-                        // local function to help insertion of visible probe
-                        void AddVisibleProbeVisibleIndexIfUpdateIsRequired(HDProbe probe, int visibleInIndex)
-                        {
-                            // Don't add it if it has already been updated this frame or not a real time probe
-                            // TODO: discard probes that are baked once per frame and already baked this frame
-                            if (!probe.requiresRealtimeUpdate)
-                                return;
-
-                            // Notify that we render the probe at this frame
-                            probe.SetIsRendered(Time.frameCount);
-
-                            if (!renderRequestIndicesWhereTheProbeIsVisible.TryGetValue(probe, out var visibleInIndices))
-                            {
-                                visibleInIndices = ListPool<int>.Get();
-                                renderRequestIndicesWhereTheProbeIsVisible.Add(probe, visibleInIndices);
-                            }
-                            if (!visibleInIndices.Contains(visibleInIndex))
-                                visibleInIndices.Add(visibleInIndex);
-                        }
-                    
+                        // Submit render context and free pooled resources for this request
+                        renderContext.Submit();
+                        GenericPool<HDCullingResults>.Release(cullingResults);
                         UnityEngine.Rendering.RenderPipeline.EndCameraRendering(renderContext, camera);
+                        continue;
                     }
+
+                    // Add render request
+                    var request = new RenderRequest
+                    {
+                        hdCamera = hdCamera,
+                        cullingResults = cullingResults,
+                        target = new RenderRequest.Target
+                        {
+                            id = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget),
+                            face = CubemapFace.Unknown
+                        },
+                        dependsOnRenderRequestIndices = ListPool<int>.Get(),
+                        index = renderRequests.Count,
+                        cameraSettings = CameraSettings.From(hdCamera)
+                        // TODO: store DecalCullResult
+                    };
+                    renderRequests.Add(request);
+                    // This is a root render request
+                    rootRenderRequestIndices.Add(request.index);
+
+                    // Add visible probes to list
+                    for (var i = 0; i < cullingResults.cullingResults.visibleReflectionProbes.Length; ++i)
+                    {
+                        var visibleProbe = cullingResults.cullingResults.visibleReflectionProbes[i];
+
+                        // TODO: The following fix is temporary.
+                        // We should investigate why we got null cull result when we change scene
+                        if (visibleProbe == null || visibleProbe.Equals(null) || visibleProbe.reflectionProbe == null || visibleProbe.reflectionProbe.Equals(null))
+                            continue;
+
+                        var additionalReflectionData =
+                            visibleProbe.reflectionProbe.GetComponent<HDAdditionalReflectionData>()
+                            ?? visibleProbe.reflectionProbe.gameObject.AddComponent<HDAdditionalReflectionData>();
+
+                        AddVisibleProbeVisibleIndexIfUpdateIsRequired(additionalReflectionData, request.index);
+                    }
+                    for (var i = 0; i < cullingResults.hdProbeCullingResults.visibleProbes.Count; ++i)
+                        AddVisibleProbeVisibleIndexIfUpdateIsRequired(cullingResults.hdProbeCullingResults.visibleProbes[i], request.index);
+
+                    // local function to help insertion of visible probe
+                    void AddVisibleProbeVisibleIndexIfUpdateIsRequired(HDProbe probe, int visibleInIndex)
+                    {
+                        // Don't add it if it has already been updated this frame or not a real time probe
+                        // TODO: discard probes that are baked once per frame and already baked this frame
+                        if (!probe.requiresRealtimeUpdate)
+                            return;
+
+                        // Notify that we render the probe at this frame
+                        probe.SetIsRendered(Time.frameCount);
+
+                        if (!renderRequestIndicesWhereTheProbeIsVisible.TryGetValue(probe, out var visibleInIndices))
+                        {
+                            visibleInIndices = ListPool<int>.Get();
+                            renderRequestIndicesWhereTheProbeIsVisible.Add(probe, visibleInIndices);
+                        }
+                        if (!visibleInIndices.Contains(visibleInIndex))
+                            visibleInIndices.Add(visibleInIndex);
+                    }
+
+                    UnityEngine.Rendering.RenderPipeline.EndCameraRendering(renderContext, camera);
                 }
 
                 foreach (var probeToRenderAndDependencies in renderRequestIndicesWhereTheProbeIsVisible)
@@ -1217,8 +1209,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         _cullingResults.Reset();
 
                         if (!(TryCalculateFrameParameters(
-                                camera,
-                                xrPassIndex: 0,
+                                new MultipassCamera(camera, 0),
                                 out _,
                                 out var hdCamera,
                                 out var cullingParameters
@@ -1537,7 +1528,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             RenderDBuffer(hdCamera, cmd, renderContext, cullingResults);
             // We can call DBufferNormalPatch after RenderDBuffer as it only affect forward material and isn't affected by RenderGBuffer
             // This reduce lifteime of stencil bit
-            DBufferNormalPatch(hdCamera, cmd, renderContext, cullingResults);       
+            DBufferNormalPatch(hdCamera, cmd, renderContext, cullingResults);
 
 #if ENABLE_RAYTRACING
             bool raytracedIndirectDiffuse = m_RaytracingIndirectDiffuse.RenderIndirectDiffuse(hdCamera, cmd, renderContext, m_FrameCount);
@@ -1572,6 +1563,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             var showGizmos = camera.cameraType == CameraType.Game
                 || camera.cameraType == CameraType.SceneView;
 #endif
+
             if (m_CurrentDebugDisplaySettings.IsDebugMaterialDisplayEnabled() || m_CurrentDebugDisplaySettings.IsMaterialValidationEnabled())
             {
                 StartStereoRendering(cmd, renderContext, hdCamera);
@@ -1819,7 +1811,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
 #if (ENABLE_RAYTRACING)
                 {
-                    {   
+                    {
                         HDRaytracingEnvironment rtEnvironement = m_RayTracingManager.CurrentEnvironment();
 
                         if(rtEnvironement != null)
@@ -2087,8 +2079,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         }
 
         bool TryCalculateFrameParameters(
-            Camera camera,
-            int xrPassIndex,
+            MultipassCamera multipassCamera,
             out HDAdditionalCameraData additionalCameraData,
             out HDCamera hdCamera,
             out ScriptableCullingParameters cullingParams
@@ -2096,6 +2087,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             // First, get aggregate of frame settings base on global settings, camera frame settings and debug settings
             // Note: the SceneView camera will never have additionalCameraData
+            Camera camera = multipassCamera.camera;
             additionalCameraData = camera.GetComponent<HDAdditionalCameraData>();
             hdCamera = default;
             cullingParams = default;
@@ -2143,7 +2135,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 currentFrameSettings.SetEnabled(FrameSettingsField.ObjectMotionVectors, false);
             }
 
-            hdCamera = HDCamera.Get(camera, xrPassIndex) ?? HDCamera.Create(camera, xrPassIndex);
+            hdCamera = HDCamera.Get(camera, multipassCamera.passIndex) ?? HDCamera.Create(camera, multipassCamera.passIndex);
             // From this point, we should only use frame settings from the camera
             hdCamera.Update(currentFrameSettings, m_VolumetricLightingSystem, m_MSAASamples);
 
@@ -2840,7 +2832,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         m_MRTTransparentVelocity[0] = hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA) ? m_CameraColorMSAABuffer : m_CameraColorBuffer;
                         m_MRTTransparentVelocity[1] = renderVelocitiesForTransparent ? m_SharedRTManager.GetVelocityBuffer(hdCamera.frameSettings.IsEnabled(FrameSettingsField.MSAA))
                             // It doesn't really matter what gets bound here since the color mask state set will prevent this from ever being written to. However, we still need to bind something
-                            // to avoid warnings about unbound render targets. The following rendertarget could really be anything if renderVelocitiesForTransparent, here the normal buffer 
+                            // to avoid warnings about unbound render targets. The following rendertarget could really be anything if renderVelocitiesForTransparent, here the normal buffer
                             // as it is guaranteed to exist and to have the same size.
                             : m_SharedRTManager.GetNormalBuffer();
 
@@ -3026,7 +3018,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._SsrLightingTextureRW, m_SsrLightingTexture);
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._ColorPyramidTexture,  previousColorPyramid);
                     cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._SsrClearCoatMaskTexture, clearCoatMask);
-                    
+
                     cmd.SetComputeIntParam(cs, HDShaderIDs._SsrColorPyramidMaxMip, hdCamera.colorPyramidHistoryMipCount - 1);
 
                     cmd.DispatchCompute(cs, kernel, HDUtils.DivRoundUp(w, 8), HDUtils.DivRoundUp(h, 8), XRGraphics.computePassCount);

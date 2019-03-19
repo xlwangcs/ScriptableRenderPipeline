@@ -230,8 +230,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             ? m_AdditionalCameraData.probeLayerMask
             : (LayerMask)~0;
 
-        static Dictionary<Tuple<Camera, int>, HDCamera> s_Cameras = new Dictionary<Tuple<Camera, int>, HDCamera>();
-        static List<Tuple<Camera, int>> s_Cleanup = new List<Tuple<Camera, int>>(); // Recycled to reduce GC pressure
+        static Dictionary<MultipassCamera, HDCamera> s_Cameras = new Dictionary<MultipassCamera, HDCamera>();
+        static List<MultipassCamera> s_Cleanup = new List<MultipassCamera>(); // Recycled to reduce GC pressure
 
         HDAdditionalCameraData m_AdditionalCameraData;
 
@@ -324,6 +324,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
+            // Local function to read legacy stereo view parameters from C++ engine
             void GetLegacyStereoViewParameters(Camera.StereoscopicEye eye, ref Matrix4x4 proj, ref Matrix4x4 view, ref Vector3 cameraPosition)
             {
                 proj = camera.GetStereoProjectionMatrix(eye);
@@ -787,7 +788,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             HDCamera hdCamera;
 
-            if (!s_Cameras.TryGetValue(new Tuple<Camera, int>(camera, passIndex), out hdCamera))
+            if (!s_Cameras.TryGetValue(new MultipassCamera(camera, passIndex), out hdCamera))
             {
                 hdCamera = null;
             }
@@ -811,7 +812,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static HDCamera Create(Camera camera, int passIndex)
         {
             HDCamera hdCamera = new HDCamera(camera, passIndex);
-            s_Cameras.Add(new Tuple<Camera, int>(camera, passIndex), hdCamera);
+            s_Cameras.Add(new MultipassCamera(camera, passIndex), hdCamera);
 
             return hdCamera;
         }

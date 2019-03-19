@@ -2344,16 +2344,20 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // real projection space.  We just use screen space to figure out what is proximal
                 // to a cluster or tile.
                 // Once we generate this non-oblique projection matrix, it can be shared across both eyes (un-array)
-                for (int eyeIndex = 0; eyeIndex < 2; eyeIndex++)
+                for (int xrViewIndex = 0; xrViewIndex < hdCamera.xrViewCount; xrViewIndex++)
                 {
-                    m_LightListProjMatrices[eyeIndex] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)eyeIndex);
-                    m_LightListProjscrMatrices[eyeIndex] = temp * m_LightListProjMatrices[eyeIndex];
-                    m_LightListInvProjscrMatrices[eyeIndex] = m_LightListProjscrMatrices[eyeIndex].inverse;
+                    m_LightListProjMatrices[xrViewIndex] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)xrViewIndex);
+                    m_LightListProjscrMatrices[xrViewIndex] = temp * m_LightListProjMatrices[xrViewIndex];
+                    m_LightListInvProjscrMatrices[xrViewIndex] = m_LightListProjscrMatrices[xrViewIndex].inverse;
                 }
             }
             else
             {
-                m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera);
+                if (hdCamera.xrlegacyMultipassEnabled)
+                    m_LightListProjMatrices[0] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
+                else
+                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera);
+
                 m_LightListProjscrMatrices[0] = temp * m_LightListProjMatrices[0];
                 m_LightListInvProjscrMatrices[0] = m_LightListProjscrMatrices[0].inverse;
             }
@@ -2367,18 +2371,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 temp.SetRow(2, new Vector4(0.0f, 0.0f, 0.5f, 0.5f));
                 temp.SetRow(3, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                if (camera.stereoEnabled)
+                for (int xrViewIndex = 0; xrViewIndex < hdCamera.xrViewCount; xrViewIndex++)
                 {
-                    for (int eyeIndex = 0; eyeIndex < 2; eyeIndex++)
-                    {
-                        m_LightListProjHMatrices[eyeIndex] = temp * m_LightListProjMatrices[eyeIndex];
-                        m_LightListInvProjHMatrices[eyeIndex] = m_LightListProjHMatrices[eyeIndex].inverse;
-                    }
-                }
-                else
-                {
-                    m_LightListProjHMatrices[0] = temp * m_LightListProjMatrices[0];
-                    m_LightListInvProjHMatrices[0] = m_LightListProjHMatrices[0].inverse;
+                    m_LightListProjHMatrices[xrViewIndex] = temp * m_LightListProjMatrices[xrViewIndex];
+                    m_LightListInvProjHMatrices[xrViewIndex] = m_LightListProjHMatrices[xrViewIndex].inverse;
                 }
 
                 var genAABBKernel = isProjectionOblique ? s_GenAABBKernel_Oblique : s_GenAABBKernel;
