@@ -67,6 +67,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         ViewConstants[] xrViewConstants;
         ComputeBuffer   xrViewConstantsGpu;
 
+        // XR legacy multipass (will be deprecated by XR SDK in 2019.3)
+        public int xrPassIndex = 0;
+        public bool xrlegacyMultipassEnabled = false;
+        public int xrLegacyMultipassEye { get { return xrPassIndex - 1; } }
+
         // Recorder specific
         IEnumerator<Action<RenderTargetIdentifier, CommandBuffer>> m_RecorderCaptureActions;
         int m_RecorderTempRT = Shader.PropertyToID("TempRecorder");
