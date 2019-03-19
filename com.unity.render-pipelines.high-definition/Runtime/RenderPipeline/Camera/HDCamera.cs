@@ -136,7 +136,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
         }
 
-        // Helper property to inform how many views are rendered simultaneously 
+        // Helper property to inform how many views are rendered simultaneously
         public int computePassCount
         {
             get
@@ -345,7 +345,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 xrViewConstantsGpu.SetData(xrViewConstants);
                 isFirstFrame = false;
             }
-            
+
             // Update viewport sizes.
             m_ViewportSizePrevFrame = new Vector2Int(m_ActualWidth, m_ActualHeight);
             m_ActualWidth = Math.Max(camera.pixelWidth, 1);
@@ -362,7 +362,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             var screenWidth = m_ActualWidth;
             var screenHeight = m_ActualHeight;
-            
+
             // XRTODO: double-wide cleanup
             textureWidthScaling = new Vector4(1.0f, 1.0f, 0.0f, 0.0f);
             if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
@@ -375,6 +375,96 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                 textureWidthScaling = new Vector4(2.0f, 0.5f, 0.0f, 0.0f);
             }
+
+            m_LastFrameActive = Time.frameCount;
+
+            // TODO: cache this, or make the history system spill the beans...
+            Vector2Int prevColorPyramidBufferSize = Vector2Int.zero;
+
+            if (numColorPyramidBuffersAllocated > 0)
+            {
+                var rt = GetCurrentFrameRT((int)HDCameraFrameHistoryType.ColorBufferMipChain).rt;
+
+                prevColorPyramidBufferSize.x = rt.width;
+                prevColorPyramidBufferSize.y = rt.height;
+            }
+
+            // TODO: cache this, or make the history system spill the beans...
+            Vector3Int prevVolumetricBufferSize = Vector3Int.zero;
+
+            if (numVolumetricBuffersAllocated != 0)
+            {
+                var rt = GetCurrentFrameRT((int)HDCameraFrameHistoryType.VolumetricLighting).rt;
+
+                prevVolumetricBufferSize.x = rt.width;
+                prevVolumetricBufferSize.y = rt.height;
+                prevVolumetricBufferSize.z = rt.volumeDepth;
+            }
+
+            m_msaaSamples = msaaSamples;
+            // Here we use the non scaled resolution for the RTHandleSystem ref size because we assume that at some point we will need full resolution anyway.
+            // This is also useful because we have some RT after final up-rez that will need the full size.
+            RTHandles.SetReferenceSize(nonScaledSize.x, nonScaledSize.y, m_msaaSamples);
+            m_HistoryRTSystem.SetReferenceSize(nonScaledSize.x, nonScaledSize.y, m_msaaSamples);
+            m_HistoryRTSystem.Swap();
+
+            Vector3Int currColorPyramidBufferSize = Vector3Int.zero;
+
+            if (numColorPyramidBuffersAllocated != 0)
+            {
+                var rt = GetCurrentFrameRT((int)HDCameraFrameHistoryType.ColorBufferMipChain).rt;
+
+                currColorPyramidBufferSize.x = rt.width;
+                currColorPyramidBufferSize.y = rt.height;
+
+                if ((currColorPyramidBufferSize.x != prevColorPyramidBufferSize.x) ||
+                    (currColorPyramidBufferSize.y != prevColorPyramidBufferSize.y))
+                {
+                    // A reallocation has happened, so the new texture likely contains garbage.
+                    colorPyramidHistoryIsValid = false;
+                }
+            }
+
+            Vector3Int currVolumetricBufferSize = Vector3Int.zero;
+
+            if (numVolumetricBuffersAllocated != 0)
+            {
+                var rt = GetCurrentFrameRT((int)HDCameraFrameHistoryType.VolumetricLighting).rt;
+
+                currVolumetricBufferSize.x = rt.width;
+                currVolumetricBufferSize.y = rt.height;
+                currVolumetricBufferSize.z = rt.volumeDepth;
+
+                if ((currVolumetricBufferSize.x != prevVolumetricBufferSize.x) ||
+                    (currVolumetricBufferSize.y != prevVolumetricBufferSize.y) ||
+                    (currVolumetricBufferSize.z != prevVolumetricBufferSize.z))
+                {
+                    // A reallocation has happened, so the new texture likely contains garbage.
+                    volumetricHistoryIsValid = false;
+                }
+            }
+
+            int maxWidth  = RTHandles.maxWidth;
+            int maxHeight = RTHandles.maxHeight;
+
+            Vector2 rcpTextureSize = Vector2.one / new Vector2(maxWidth, maxHeight);
+
+            m_ViewportScalePreviousFrame = m_ViewportSizePrevFrame * rcpTextureSize;
+            m_ViewportScaleCurrentFrame  = new Vector2Int(m_ActualWidth, m_ActualHeight) * rcpTextureSize;
+
+            screenSize = new Vector4(screenWidth, screenHeight, 1.0f / screenWidth, 1.0f / screenHeight);
+            screenParams = new Vector4(screenSize.x, screenSize.y, 1 + screenSize.z, 1 + screenSize.w);
+
+            finalViewport = new Rect(camera.pixelRect.x, camera.pixelRect.y, nonScaledSize.x, nonScaledSize.y);
+
+            if (vlSys != null)
+            {
+                vlSys.UpdatePerCameraData(this);
+            }
+
+            UpdateVolumeParameters();
+
+            m_RecorderCaptureActions = CameraCaptureBridge.GetCaptureActions(camera);
         }
 
         void UpdateAntialiasing()
@@ -685,7 +775,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             frameIndex &= 1;
             var hdPipeline = (HDRenderPipeline)RenderPipelineManager.currentPipeline;
-            
+
             return rtHandleSystem.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: (GraphicsFormat)hdPipeline.currentPlatformRenderPipelineSettings.colorBufferFormat,
                                         enableRandomWrite: true, useMipMap: true, autoGenerateMips: false, xrInstancing: true,
                                         name: string.Format("CameraColorBufferMipChain{0}", frameIndex));
