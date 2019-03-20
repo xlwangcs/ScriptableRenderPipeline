@@ -30,6 +30,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public Vector4   screenParams;
         public int       volumeLayerMask;
         public Transform volumeAnchor;
+        // This viewport size is scaled by dynamic resolution and is positioned at (0, 0) (HDRP always renders internally at (0,0))
+        public Rect      renderingViewport;
         // This will have the correct viewport position and the size will be full resolution (ie : not taking dynamic rez into account)
         public Rect      finalViewport;
 
@@ -322,7 +324,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             var screenWidth = m_ActualWidth;
             var screenHeight = m_ActualHeight;
-            
+
             // XRTODO: double-wide cleanup
             textureWidthScaling = new Vector4(1.0f, 1.0f, 0.0f, 0.0f);
             if (camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
@@ -416,6 +418,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             screenParams = new Vector4(screenSize.x, screenSize.y, 1 + screenSize.z, 1 + screenSize.w);
 
             finalViewport = new Rect(camera.pixelRect.x, camera.pixelRect.y, nonScaledSize.x, nonScaledSize.y);
+            renderingViewport = new Rect(0.0f, 0.0f, m_ActualWidth, m_ActualHeight);
 
             if (vlSys != null)
             {
@@ -837,7 +840,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             frameIndex &= 1;
             var hdPipeline = (HDRenderPipeline)RenderPipelineManager.currentPipeline;
-            
+
             return rtHandleSystem.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: (GraphicsFormat)hdPipeline.currentPlatformRenderPipelineSettings.colorBufferFormat,
                                         enableRandomWrite: true, useMipMap: true, autoGenerateMips: false, xrInstancing: true,
                                         name: string.Format("CameraColorBufferMipChain{0}", frameIndex));
