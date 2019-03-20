@@ -111,6 +111,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         RTHandleSystem.RTHandle m_DistortionBuffer;
 
         RTHandleSystem.RTHandle m_LowResTransparentBuffer;
+        // TODO_FCC: Can we avoid an extra copy? Can we move to the pp pipe? 
+        RTHandleSystem.RTHandle m_CameraColorAndLowResTransparent;
 
         // TODO: remove me, I am just a temporary debug texture. :-)
         // RTHandleSystem.RTHandle m_SsrDebugTexture;
@@ -418,6 +420,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             m_CameraColorBuffer = RTHandles.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: GetColorBufferFormat(), enableRandomWrite: true, useMipMap: false, xrInstancing: true, useDynamicScale: true, name: "CameraColor");
             m_CameraSssDiffuseLightingBuffer = RTHandles.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: GraphicsFormat.B10G11R11_UFloatPack32, enableRandomWrite: true, xrInstancing: true, useDynamicScale: true, name: "CameraSSSDiffuseLighting");
+            m_CameraColorAndLowResTransparent = RTHandles.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: GetColorBufferFormat(), enableRandomWrite: true, useMipMap: false, xrInstancing: true, useDynamicScale: true, name: "CameraColorWithLowResTransparent");
 
             m_DistortionBuffer = RTHandles.Alloc(Vector2.one, filterMode: FilterMode.Point, colorFormat: Builtin.GetDistortionBufferFormat(), xrInstancing: true, useDynamicScale: true, name: "Distortion");
 
@@ -457,6 +460,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             RTHandles.Release(m_CameraColorBuffer);
             RTHandles.Release(m_CameraSssDiffuseLightingBuffer);
+            RTHandles.Release(m_CameraColorAndLowResTransparent);
 
             RTHandles.Release(m_DistortionBuffer);
             RTHandles.Release(m_ScreenSpaceShadowsBuffer);
@@ -1905,8 +1909,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 PushFullScreenLightingDebugTexture(hdCamera, cmd, m_CameraColorBuffer);
             }
 
+            UpsampleTransparent(hdCamera, cmd);
+
             // At this point, m_CameraColorBuffer has been filled by either debug views are regular rendering so we can push it here.
-            PushColorPickerDebugTexture(cmd, hdCamera, m_CameraColorBuffer);
+            PushColorPickerDebugTexture(cmd, hdCamera, m_CameraColorAndLowResTransparent);
 
             RenderPostProcess(cullingResults, hdCamera, target.id, renderContext, cmd);
 
@@ -2902,6 +2908,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             using (new ProfilingSample(cmd, "Low Res Transparent", CustomSamplerId.ForwardPassName.GetSampler()))
             {
                 cmd.SetGlobalInt(HDShaderIDs._OffScreenRendering, 1);
+                cmd.SetGlobalInt(HDShaderIDs._LowResTransparentFactor, 2);
                 HDUtils.SetRenderTarget(cmd, hdCamera, m_LowResTransparentBuffer, m_SharedRTManager.GetLowResDepthBuffer(), clearFlag: ClearFlag.Color, Color.black);
                 RenderQueueRange transparentRange = HDRenderQueue.k_RenderQueue_LowTransparent;
                 // Set viewport, state etc. 
@@ -3115,6 +3122,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         void DownsampleDepthForLowResTransparency(HDCamera hdCamera, CommandBuffer cmd)
         {
+            // TODO_FCC: Add sampler id 
             using (new ProfilingSample(cmd, "Downsample Depth Buffer for Low Res Transparency", CustomSamplerId.CopyDepthBuffer.GetSampler()))
             {
                 HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetLowResDepthBuffer());
@@ -3122,7 +3130,23 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // TODO: Add option to switch modes at runtime
                 m_DownsampleDepthMaterial.EnableKeyword("CHECKERBOARD_DOWNSAMPLE");
                 cmd.DrawProcedural(Matrix4x4.identity, m_DownsampleDepthMaterial, 0, MeshTopology.Triangles, 3, 1, null);
+            }
+        }
 
+        void UpsampleTransparent(HDCamera hdCamera, CommandBuffer cmd)
+        {
+            // TODO_FCC: Add sampler id 
+            using (new ProfilingSample(cmd, "Upsample Low Res Transparency", CustomSamplerId.CopyDepthBuffer.GetSampler()))
+            {
+                ComputeShader cs = m_Asset.renderPipelineResources.shaders.upsampleTransparentCS;
+
+                // TODO_FCC: Add switch at runtime
+                int kernel = cs.FindKernel("UpsampleTransparent_Bilinear");
+
+                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._LowResTransparent, m_LowResTransparentBuffer);
+                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._InputTexture, m_CameraColorBuffer);
+                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._OutputTexture, m_CameraColorAndLowResTransparent);
+                cmd.DispatchCompute(cs, kernel, (hdCamera.actualWidth + 7) / 8, (hdCamera.actualHeight + 7) / 8, XRGraphics.computePassCount);
             }
         }
 
@@ -3415,7 +3439,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 cmd: cmd,
                 camera: hdCamera,
                 blueNoise: m_BlueNoise,
-                colorBuffer: m_CameraColorBuffer,
+                colorBuffer: m_CameraColorAndLowResTransparent,
                 afterPostProcessTexture: GetAfterPostProcessOffScreenBuffer(),
                 lightingBuffer: null,
                 finalRT: destination,

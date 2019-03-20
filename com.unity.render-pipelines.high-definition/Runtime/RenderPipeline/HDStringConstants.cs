@@ -302,7 +302,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _TextureWidthScaling = Shader.PropertyToID("_TextureWidthScaling"); // (2.0, 0.5) for SinglePassDoubleWide (stereo) and (1.0, 1.0) otherwise
 
         public static readonly int _DepthTexture                   = Shader.PropertyToID("_DepthTexture");
-        public static readonly int _LowResDepthTexture             = Shader.PropertyToID("_LowResDepthTexture");
         public static readonly int _DepthValuesTexture             = Shader.PropertyToID("_DepthValuesTexture");
         public static readonly int _CameraColorTexture             = Shader.PropertyToID("_CameraColorTexture");
         public static readonly int _CameraColorTextureRW           = Shader.PropertyToID("_CameraColorTextureRW");
@@ -474,7 +473,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         public static readonly int _EnableLightLayers              = Shader.PropertyToID("_EnableLightLayers"); 
         public static readonly int _OffScreenRendering             = Shader.PropertyToID("_OffScreenRendering");
+        public static readonly int _LowResTransparentFactor        = Shader.PropertyToID("_LowResTransparentFactor");
         public static readonly int _EnableSpecularLighting         = Shader.PropertyToID("_EnableSpecularLighting");
+        
 
 #if ENABLE_RAYTRACING
         // Raytracing variables
@@ -686,5 +687,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _SMAASearchTex                  = Shader.PropertyToID("_SearchTex");
         public static readonly int _SMAABlendTex                   = Shader.PropertyToID("_BlendTex");
         public static readonly int _SMAARTMetrics                  = Shader.PropertyToID("_SMAARTMetrics");
+
+        public static readonly int _LowResDepthTexture             = Shader.PropertyToID("_LowResDepthTexture");
+        public static readonly int _LowResTransparent              = Shader.PropertyToID("_LowResTransparent");
+
+
     }
 }

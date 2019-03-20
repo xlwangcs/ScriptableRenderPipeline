@@ -83,8 +83,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public Shader copyDepthBufferPS;
             [Reload("ShaderLibrary/Blit.shader")]
             public Shader blitPS;
+
+            // TODO_FCC: Move to its own folder
             [Reload("ShaderLibrary/DownsampleDepth.shader")]
             public Shader downsampleDepthPS;
+            [Reload("ShaderLibrary/UpsampleTransparent.compute")]
+            public ComputeShader upsampleTransparentCS;
 
             // Sky
             [Reload("Sky/BlitCubemap.shader")]

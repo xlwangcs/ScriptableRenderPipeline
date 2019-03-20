@@ -79,6 +79,8 @@ void Frag(PackedVaryingsToPS packedInput,
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(packedInput);
     FragInputs input = UnpackVaryingsMeshToFragInputs(packedInput.vmesh);
 
+    input.positionSS.xy = _OffScreenRendering > 0 ? (input.positionSS.xy * _LowResTransparentFactor) : input.positionSS.xy;
+
     uint2 tileIndex = uint2(input.positionSS.xy) / GetTileSize();
 #if defined(UNITY_SINGLE_PASS_STEREO)
     tileIndex.x -= unity_StereoEyeIndex * _NumTileClusteredX;

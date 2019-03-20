@@ -293,6 +293,7 @@ CBUFFER_START(UnityGlobal)
     uint _EnableSSRefraction;
 
     uint _OffScreenRendering;
+    uint _LowResTransparentFactor;
 
 CBUFFER_END
 
