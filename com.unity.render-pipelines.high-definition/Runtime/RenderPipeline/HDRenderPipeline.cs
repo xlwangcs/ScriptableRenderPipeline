@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine.Experimental.GlobalIllumination;
+using UnityEngine.Experimental.XR;
 using UnityEngine;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
@@ -190,6 +191,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         readonly LightLoop m_LightLoop = new LightLoop();
         readonly VolumetricLightingSystem m_VolumetricLightingSystem = new VolumetricLightingSystem();
         readonly AmbientOcclusionSystem m_AmbientOcclusionSystem;
+
+        // XR SDK
+        private List<XRDisplaySubsystem> m_XRDisplayList = new List<XRDisplaySubsystem>();
+        private List<XRPass> m_XRPassList = new List<XRPass>();
 
         // Debugging
         MaterialPropertyBlock m_SharedPropertyBlock = new MaterialPropertyBlock();
@@ -1001,12 +1006,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             {
                 // With XR multi-pass enabled, each camera can be rendered multiple times with different parameters
-                var multipassCameras = MultipassCamera.SetupFrame(cameras);
+                var xrCameras = SetupXR(cameras);
 
                 // Culling loop
-                foreach(var multipassCamera in multipassCameras)
+                foreach(var xrCamera in xrCameras)
                 {
-                    var camera = multipassCamera.camera;
+                    var camera = xrCamera.camera;
                     if (camera == null)
                         continue;
 
@@ -1026,7 +1031,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                     // Try to compute the parameters of the request or skip the request
                     var skipRequest = !(TryCalculateFrameParameters(
-                            multipassCamera,
+                            xrCamera,
                             out var additionalCameraData,
                             out var hdCamera,
                             out var cullingParameters
@@ -1209,7 +1214,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         _cullingResults.Reset();
 
                         if (!(TryCalculateFrameParameters(
-                                new MultipassCamera(camera, 0),
+                                new XRCamera(camera, default),
                                 out _,
                                 out var hdCamera,
                                 out var cullingParameters
@@ -2028,6 +2033,80 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
         }
 
+        List<XRCamera> SetupXR(Camera[] cameras/*, out multipassCameras */)
+        {
+            // Refresh active XR displays
+            SubsystemManager.GetInstances(m_XRDisplayList);
+
+            List<XRCamera> xrCameras = new List<XRCamera>();
+
+            // XRTODO: support more than 1 display for XR SDK
+            var xrDisplay = m_XRDisplayList.Count > 0 ? m_XRDisplayList[0] : null;
+            if (xrDisplay != null)
+            {
+                xrDisplay.disableLegacyRenderer = true;
+
+                //// Local function to evaluate if a render pass is compatible with instancing
+                //bool IsInstancingFriendly(Camera camera, int renderPassIndex)
+                //{
+                //    for (int renderParamIndex = 0; renderParamIndex < xrDisplay.GetRenderParamCount(renderPassIndex); ++renderParamIndex)
+                //    {
+                //        if (xrDisplay.TryGetRenderParam(camera, renderPassIndex, renderParamIndex, out var renderParam))
+                //        {
+                //            if (renderParam.textureArraySlice < 0)
+                //                return false;
+
+                //            // XRTODO: validate viewport size
+                //        }
+                //    }
+
+                //    return true;
+                //}
+
+                for (int renderPassIndex = 0; renderPassIndex < xrDisplay.GetRenderPassCount(); ++renderPassIndex)
+                {
+                    if (xrDisplay.TryGetRenderPass(renderPassIndex, out var renderPass))
+                    {
+                        foreach (var camera in cameras)
+                        {
+                            //bool instancingReady = IsInstancingFriendly(camera, renderPassIndex);
+
+                            XRPass xrPass = new XRPass(renderPassIndex, renderPass);
+
+                            for (int renderParamIndex = 0; renderParamIndex < xrDisplay.GetRenderParamCount(renderPassIndex); ++renderParamIndex)
+                            {
+                                if (xrDisplay.TryGetRenderParam(camera, renderPassIndex, renderParamIndex, out var renderParam))
+                                {
+                                    XRView xrView = new XRView();
+                                    xrView.renderTarget = renderPass.renderTarget;
+                                    xrView.renderTargetDesc = renderPass.renderTargetDesc;
+                                    xrView.view = renderParam.view;
+                                    xrView.proj = renderParam.projection;
+                                    xrView.viewport = renderParam.viewport;
+                                    xrView.occlusionMesh = renderParam.occlusionMesh;
+
+                                    xrPass.views.Add(xrView);
+                                }
+                            }
+
+                            xrCameras.Add(new XRCamera(camera, xrPass));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // TODO: legacy multipass
+
+                foreach (var camera in cameras)
+                {
+                    xrCameras.Add(new XRCamera(camera, default));
+                }
+            }
+
+            return xrCameras;
+        }
+
         // $"HDProbe RenderCamera ({probeName}: {face:00} for viewer '{viewerName}')"
         unsafe string ComputeProbeCameraName(string probeName, int face, string viewerName)
         {
@@ -2079,7 +2158,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         }
 
         bool TryCalculateFrameParameters(
-            MultipassCamera multipassCamera,
+            XRCamera xrCamera,
             out HDAdditionalCameraData additionalCameraData,
             out HDCamera hdCamera,
             out ScriptableCullingParameters cullingParams
@@ -2087,7 +2166,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             // First, get aggregate of frame settings base on global settings, camera frame settings and debug settings
             // Note: the SceneView camera will never have additionalCameraData
-            Camera camera = multipassCamera.camera;
+            Camera camera = xrCamera.camera;
             additionalCameraData = camera.GetComponent<HDAdditionalCameraData>();
             hdCamera = default;
             cullingParams = default;
@@ -2135,7 +2214,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 currentFrameSettings.SetEnabled(FrameSettingsField.ObjectMotionVectors, false);
             }
 
-            hdCamera = HDCamera.Get(camera, multipassCamera.passIndex) ?? HDCamera.Create(camera, multipassCamera.passIndex);
+            hdCamera = HDCamera.Get(camera, xrCamera.xrPass) ?? HDCamera.Create(camera, xrCamera.xrPass);
             // From this point, we should only use frame settings from the camera
             hdCamera.Update(currentFrameSettings, m_VolumetricLightingSystem, m_MSAASamples);
 

@@ -67,10 +67,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         ViewConstants[] xrViewConstants;
         ComputeBuffer   xrViewConstantsGpu;
 
+        public XRPass xrPass;
+
         // XR legacy multipass (will be deprecated by XR SDK in 2019.3)
-        public int xrPassIndex = 0;
+        //public int xrPassIndex = 0;
         public bool xrlegacyMultipassEnabled = false;
-        public int xrLegacyMultipassEye { get { return xrPassIndex - 1; } }
+        public int xrLegacyMultipassEye { get { return xrPass.passIndex - 1; } }
 
         // Recorder specific
         IEnumerator<Action<RenderTargetIdentifier, CommandBuffer>> m_RecorderCaptureActions;
@@ -230,8 +232,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             ? m_AdditionalCameraData.probeLayerMask
             : (LayerMask)~0;
 
-        static Dictionary<MultipassCamera, HDCamera> s_Cameras = new Dictionary<MultipassCamera, HDCamera>();
-        static List<MultipassCamera> s_Cleanup = new List<MultipassCamera>(); // Recycled to reduce GC pressure
+        static Dictionary<XRCamera, HDCamera> s_Cameras = new Dictionary<XRCamera, HDCamera>();
+        static List<XRCamera> s_Cleanup = new List<XRCamera>(); // Recycled to reduce GC pressure
 
         HDAdditionalCameraData m_AdditionalCameraData;
 
@@ -240,10 +242,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         int numColorPyramidBuffersAllocated = 0;
         int numVolumetricBuffersAllocated   = 0;
 
-        public HDCamera(Camera cam, int passIndex)
+        public HDCamera(Camera cam, XRPass xrPass)
         {
             camera = cam;
-            xrPassIndex = passIndex;
+            this.xrPass = xrPass;
 
             frustum = new Frustum();
             frustum.planes = new Plane[6];
@@ -251,23 +253,23 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             frustumPlaneEquations = new Vector4[6];
 
-            // XR legacy rendering (will de deprecated by XR SDK)
-            if (camera.stereoEnabled)
-            {
-                switch (XRGraphics.stereoRenderingMode)
-                {
-                    case XRGraphics.StereoRenderingMode.MultiPass:
-                        xrlegacyMultipassEnabled = true;
-                        break;
-                    // XRTODO: double-wide cleanup
-                    case XRGraphics.StereoRenderingMode.SinglePass:
-                        xrViewCount = 2;
-                        break;
-                    case XRGraphics.StereoRenderingMode.SinglePassInstanced:
-                        xrViewCount = 2;
-                        break;
-                }
-            }
+            //// XR legacy rendering (will de deprecated by XR SDK)
+            //if (camera.stereoEnabled)
+            //{
+            //    switch (XRGraphics.stereoRenderingMode)
+            //    {
+            //        case XRGraphics.StereoRenderingMode.MultiPass:
+            //            xrlegacyMultipassEnabled = true;
+            //            break;
+            //        // XRTODO: double-wide cleanup
+            //        case XRGraphics.StereoRenderingMode.SinglePass:
+            //            xrViewCount = 2;
+            //            break;
+            //        case XRGraphics.StereoRenderingMode.SinglePassInstanced:
+            //            xrViewCount = 2;
+            //            break;
+            //    }
+            //}
 
             // Sanity check
             Debug.Assert(xrViewCount <= TextureXR.kMaxSliceCount);
@@ -330,6 +332,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // Local function to read legacy stereo view parameters from C++ engine
             void GetLegacyStereoViewParameters(Camera.StereoscopicEye eye, ref Matrix4x4 proj, ref Matrix4x4 view, ref Vector3 cameraPosition)
             {
+                Debug.Assert(camera.stereoEnabled, "Call to GetLegacyStereoViewParameters() requires camera.stereoEnabled to be true!");
+
                 proj = camera.GetStereoProjectionMatrix(eye);
                 view = camera.GetStereoViewMatrix(eye);
                 cameraPosition = view.inverse.GetColumn(3);
@@ -341,8 +345,16 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 var view = camera.worldToCameraMatrix;
                 var cameraPosition = camera.transform.position;
 
-                if (xrlegacyMultipassEnabled)
-                    GetLegacyStereoViewParameters((Camera.StereoscopicEye)xrLegacyMultipassEye, ref proj, ref view, ref cameraPosition);
+                //if (xrlegacyMultipassEnabled)
+                //    GetLegacyStereoViewParameters((Camera.StereoscopicEye)xrLegacyMultipassEye, ref proj, ref view, ref cameraPosition);
+
+                if (xrPass.passIndex > 0)
+                {
+                    Debug.Assert(xrPass.views.Count == 1);
+                    proj = xrPass.views[0].proj;
+                    view = xrPass.views[0].view;
+                    cameraPosition = view.inverse.GetColumn(3);
+                }
 
                 UpdateViewConstants(ref mainViewConstants, proj, view, cameraPosition);
 
@@ -787,11 +799,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         }
 
         // Will return NULL if the camera does not exist.
-        public static HDCamera Get(Camera camera, int passIndex)
+        public static HDCamera Get(Camera camera, XRPass xrPass)
         {
             HDCamera hdCamera;
 
-            if (!s_Cameras.TryGetValue(new MultipassCamera(camera, passIndex), out hdCamera))
+            if (!s_Cameras.TryGetValue(new XRCamera(camera, xrPass), out hdCamera))
             {
                 hdCamera = null;
             }
@@ -812,10 +824,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         // Pass all the systems that may want to initialize per-camera data here.
         // That way you will never create an HDCamera and forget to initialize the data.
-        public static HDCamera Create(Camera camera, int passIndex)
+        public static HDCamera Create(Camera camera, XRPass xrPass)
         {
-            HDCamera hdCamera = new HDCamera(camera, passIndex);
-            s_Cameras.Add(new MultipassCamera(camera, passIndex), hdCamera);
+            HDCamera hdCamera = new HDCamera(camera, xrPass);
+            s_Cameras.Add(new XRCamera(camera, xrPass), hdCamera);
 
             return hdCamera;
         }

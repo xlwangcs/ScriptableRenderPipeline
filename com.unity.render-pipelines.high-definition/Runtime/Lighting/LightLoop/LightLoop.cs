@@ -1789,9 +1789,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     worldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Left);
                     rightEyeWorldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Right);
                 }
-                else if (hdCamera.xrlegacyMultipassEnabled)
+                else if (hdCamera.xrPass.passIndex > 0)
                 {
-                    worldToView = WorldToViewStereo(camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
+                    //worldToView = WorldToViewStereo(camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
+
+                    worldToView = hdCamera.xrPass.views[0].view;
                 }
 
                 // We must clear the shadow requests before checking if they are any visible light because we would have requests from the last frame executed in the case where we don't see any lights
@@ -2353,10 +2355,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
             else
             {
-                if (hdCamera.xrlegacyMultipassEnabled)
-                    m_LightListProjMatrices[0] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
-                else
-                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera);
+                var proj = hdCamera.xrPass.passIndex > 0 ? hdCamera.xrPass.views[0].proj : hdCamera.camera.projectionMatrix;
+                m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera.projectionMatrix);
 
                 m_LightListProjscrMatrices[0] = temp * m_LightListProjMatrices[0];
                 m_LightListInvProjscrMatrices[0] = m_LightListProjscrMatrices[0].inverse;

@@ -232,9 +232,9 @@ namespace UnityEngine.Experimental.Rendering
             return FlipMatrixLHSRHS * camera.worldToCameraMatrix;
         }
 
-        public static Matrix4x4 GetProjectionMatrixLHS(this Camera camera)
+        public static Matrix4x4 GetProjectionMatrixLHS(Matrix4x4 projectionMatrix)
         {
-            return camera.projectionMatrix * FlipMatrixLHSRHS;
+            return projectionMatrix * FlipMatrixLHSRHS;
         }
 
         public static bool IsProjectionMatrixOblique(Matrix4x4 projectionMatrix)

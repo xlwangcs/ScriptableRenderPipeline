@@ -1,5 +1,6 @@
 using System;
 using UnityEngine.Rendering;
+using UnityEngine.Experimental.XR;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
 {
@@ -18,13 +19,22 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public Camera camera { get { return m_Camera; } }
         public int passIndex { get { return m_PassIndex; } }
 
-        static public MultipassCamera[] SetupFrame(Camera[] cameras)
+        static public MultipassCamera[] SetupFrame(Camera[] cameras, XRDisplaySubsystem xrDisplay)
         {
             int passCount = 1;
 
-            // XR legacy multi-pass rendering using C++ engine
-            if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
-                passCount = 2;
+            // XR SDK
+            if (xrDisplay != null)
+            {
+                passCount = xrDisplay.GetRenderPassCount();
+                xrDisplay.disableLegacyRenderer = true;
+            }
+            else
+            {
+                // XR legacy multi-pass rendering using C++ engine
+                if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
+                    passCount = 2;
+            }
 
             // Late and cached allocation
             int cameraCount = cameras.Length * passCount;
@@ -34,7 +44,18 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             int cameraIndex = 0;
             foreach (var camera in cameras)
             {
-                if (camera.stereoEnabled && passCount > 1)
+                if (xrDisplay != null)
+                {
+                    for (int passIndex = 1; passIndex <= passCount; ++passIndex)
+                    {
+                        XRDisplaySubsystem.XRRenderPass xrRenderPass = new XRDisplaySubsystem.XRRenderPass();
+                        if (xrDisplay.TryGetRenderPass(passIndex - 1, out xrRenderPass))
+                        {
+                            s_Cameras[cameraIndex++] = new MultipassCamera(camera, passIndex);
+                        }
+                    }
+                }
+                else if (camera.stereoEnabled && passCount > 1)
                 {
                     // pass 0 is used only when multi-pass is not active
                     for (int passIndex = 1; passIndex <= passCount; ++passIndex)
