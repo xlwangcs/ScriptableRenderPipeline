@@ -1,54 +1,79 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine.Rendering;
+using UnityEngine.Experimental.XR;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
 {
+    public struct PassInfo
+    {
+        public XRDisplaySubsystem xrDisplay;
+        public int renderPassIndex;
+        public int renderParamIndex;
+
+        public PassInfo(XRDisplaySubsystem xrDisplay, int renderPassIndex, int renderParamIndex)
+        {
+            this.xrDisplay = xrDisplay;
+            this.renderPassIndex = renderPassIndex;
+            this.renderParamIndex = renderParamIndex;
+        }
+    }
+
     public struct MultipassCamera
     {
         public Camera m_Camera;
-        public int m_PassIndex;
-        static private MultipassCamera[] s_Cameras = null;
+        public PassInfo m_PassInfo;
 
-        public MultipassCamera(Camera camera = null, int passIndex = 0)
+        public MultipassCamera(Camera camera = null, PassInfo passInfo = default)
         {
             m_Camera = camera;
-            m_PassIndex = passIndex;
+            m_PassInfo = passInfo;
         }
 
         public Camera camera { get { return m_Camera; } }
-        public int passIndex { get { return m_PassIndex; } }
+        public PassInfo passInfo { get { return m_PassInfo; } }
 
-        static public MultipassCamera[] SetupFrame(Camera[] cameras)
+        static public List<MultipassCamera> SetupFrame(Camera[] cameras, XRDisplaySubsystem xrDisplay)
         {
-            int passCount = 1;
-
-            // XR legacy multi-pass rendering using C++ engine
-            if (XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
-                passCount = 2;
-
-            // Late and cached allocation
-            int cameraCount = cameras.Length * passCount;
-            if (s_Cameras == null || s_Cameras.Length != cameraCount)
-                s_Cameras = new MultipassCamera[cameraCount];
-
-            int cameraIndex = 0;
+            // TODO: use pool
+            List<MultipassCamera> multipassCameras = new List<MultipassCamera>();
             foreach (var camera in cameras)
             {
-                if (camera.stereoEnabled && passCount > 1)
+                if (xrDisplay != null)
                 {
-                    // pass 0 is used only when multi-pass is not active
-                    for (int passIndex = 1; passIndex <= passCount; ++passIndex)
+                    for (int renderPassIndex = 0; renderPassIndex < xrDisplay.GetRenderPassCount(); ++renderPassIndex)
                     {
-                        s_Cameras[cameraIndex++] = new MultipassCamera(camera, passIndex);
+                        if (xrDisplay.TryGetRenderPass(renderPassIndex, out var renderPass))
+                        {
+                            for (int renderParamIndex = 0; renderParamIndex < xrDisplay.GetRenderParamCount(renderPassIndex); ++renderParamIndex)
+                            {
+                                if (xrDisplay.TryGetRenderParam(camera, renderPassIndex, renderParamIndex, out var renderParam))
+                                {
+                                    PassInfo passInfo = new PassInfo(xrDisplay, renderPassIndex, renderParamIndex);
+                                    multipassCameras.Add(new MultipassCamera(camera, passInfo));
+                                }
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    s_Cameras[cameraIndex++] = new MultipassCamera(camera, 0);
+                    if (camera.stereoEnabled && XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
+                    {
+                        for (int passIndex = 0; passIndex < 2; ++passIndex)
+                        {
+                            PassInfo passInfo = new PassInfo(xrDisplay, passIndex, -1);
+                            multipassCameras.Add(new MultipassCamera(camera, passInfo));
+                        }
+                    }
+                    else
+                    {
+                        multipassCameras.Add(new MultipassCamera(camera));
+                    }
                 }
             }
 
-            return s_Cameras;
+            return multipassCameras;
         }
     }
 }

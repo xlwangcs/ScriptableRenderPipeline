@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine.Experimental.GlobalIllumination;
+using UnityEngine.Experimental.XR;
 using UnityEngine;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
@@ -190,6 +191,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         readonly LightLoop m_LightLoop = new LightLoop();
         readonly VolumetricLightingSystem m_VolumetricLightingSystem = new VolumetricLightingSystem();
         readonly AmbientOcclusionSystem m_AmbientOcclusionSystem;
+
+        // XR SDK
+        private List<XRDisplaySubsystem> m_XRDisplayList = new List<XRDisplaySubsystem>();
 
         // Debugging
         MaterialPropertyBlock m_SharedPropertyBlock = new MaterialPropertyBlock();
@@ -979,6 +983,15 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
+            // Refresh XR SDK displays
+            SubsystemManager.GetInstances(m_XRDisplayList);
+            XRDisplaySubsystem xrDisplay = null;
+            if (m_XRDisplayList.Count > 0)
+            {
+                xrDisplay = m_XRDisplayList[0];
+                xrDisplay.disableLegacyRenderer = true;
+            }
+
 			// TODO: Check with Fred if it make sense to put that here now that we have refactor the loop
 #if ENABLE_RAYTRACING
             // This call need to happen once per frame, it evaluates if we need to fetch the geometry/lights for some subscenes
@@ -1001,7 +1014,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             {
                 // With XR multi-pass enabled, each camera can be rendered multiple times with different parameters
-                var multipassCameras = MultipassCamera.SetupFrame(cameras);
+                var multipassCameras = MultipassCamera.SetupFrame(cameras, xrDisplay);
 
                 // Culling loop
                 foreach(var multipassCamera in multipassCameras)
@@ -1053,6 +1066,16 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         continue;
                     }
 
+                    // Select render target
+                    RenderTargetIdentifier targetId = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget);
+                    if (multipassCamera.passInfo.xrDisplay != null)
+                    {
+                        if (multipassCamera.passInfo.xrDisplay.TryGetRenderPass(multipassCamera.passInfo.renderPassIndex, out var renderPass))
+                        {
+                            targetId = renderPass.renderTarget;
+                        }
+                    }
+
                     // Add render request
                     var request = new RenderRequest
                     {
@@ -1060,7 +1083,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         cullingResults = cullingResults,
                         target = new RenderRequest.Target
                         {
-                            id = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget),
+                            id = targetId,
                             face = CubemapFace.Unknown
                         },
                         dependsOnRenderRequestIndices = ListPool<int>.Get(),
@@ -1209,7 +1232,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         _cullingResults.Reset();
 
                         if (!(TryCalculateFrameParameters(
-                                new MultipassCamera(camera, 0),
+                                new MultipassCamera(camera),
                                 out _,
                                 out var hdCamera,
                                 out var cullingParameters
@@ -2135,7 +2158,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 currentFrameSettings.SetEnabled(FrameSettingsField.ObjectMotionVectors, false);
             }
 
-            hdCamera = HDCamera.Get(camera, multipassCamera.passIndex) ?? HDCamera.Create(camera, multipassCamera.passIndex);
+            hdCamera = HDCamera.Get(camera, multipassCamera.passInfo) ?? HDCamera.Create(camera, multipassCamera.passInfo);
             // From this point, we should only use frame settings from the camera
             hdCamera.Update(currentFrameSettings, m_VolumetricLightingSystem, m_MSAASamples);
 
@@ -2143,10 +2166,20 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (additionalCameraData != null && additionalCameraData.hasCustomRender)
                 return false;
 
-            if (!camera.TryGetCullingParameters(
-                camera.stereoEnabled,
-                out cullingParams)) // Fixme remove stereo passdown?
-                return false;
+            if (multipassCamera.passInfo.xrDisplay != null)
+            {
+                if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
+                {
+                    if (!hdCamera.xrPassInfo.xrDisplay.TryGetCullingParams(camera, renderPass.cullingPassIndex, out cullingParams))
+                        return false;
+                }
+            }
+            else
+            {
+                // XRTODO: remove stereo passdown?
+                if (!camera.TryGetCullingParameters(camera.stereoEnabled, out cullingParams))
+                    return false;
+            }
 
             if (m_DebugDisplaySettings.IsCameraFreezeEnabled())
             {

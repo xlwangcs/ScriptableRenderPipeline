@@ -568,6 +568,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                 AssignCurrentBatches(ref decalToWorldBatch, ref normalToWorldBatch, batchCount);
 
+                // XRTODO: handle XR transforms
                 Vector3 cameraPos = instance.CurrentCamera.transform.position;
                 Matrix4x4 worldToView = LightLoop.WorldToCamera(instance.CurrentCamera);
                 bool perChannelMask = instance.perChannelMask;

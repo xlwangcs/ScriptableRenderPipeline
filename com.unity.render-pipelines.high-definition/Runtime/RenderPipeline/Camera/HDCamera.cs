@@ -64,13 +64,14 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         // XR instanced views (hardware-accelerated single-pass instancing or multiview)
         public int xrViewCount = 1;
         public bool xrInstancingEnabled { get { return xrViewCount > 1; } }
-        ViewConstants[] xrViewConstants;
-        ComputeBuffer   xrViewConstantsGpu;
+        public ViewConstants[] xrViewConstants;
+        ComputeBuffer xrViewConstantsGpu;
 
         // XR legacy multipass (will be deprecated by XR SDK in 2019.3)
-        public int xrPassIndex = 0;
         public bool xrlegacyMultipassEnabled = false;
-        public int xrLegacyMultipassEye { get { return xrPassIndex - 1; } }
+        public int xrLegacyMultipassEye { get { return xrPassInfo.renderPassIndex; } }
+
+        public PassInfo xrPassInfo;
 
         // Recorder specific
         IEnumerator<Action<RenderTargetIdentifier, CommandBuffer>> m_RecorderCaptureActions;
@@ -240,10 +241,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         int numColorPyramidBuffersAllocated = 0;
         int numVolumetricBuffersAllocated   = 0;
 
-        public HDCamera(Camera cam, int passIndex)
+        public HDCamera(Camera cam, PassInfo passInfo)
         {
             camera = cam;
-            xrPassIndex = passIndex;
+            xrPassInfo = passInfo;
 
             frustum = new Frustum();
             frustum.planes = new Plane[6];
@@ -251,8 +252,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             frustumPlaneEquations = new Vector4[6];
 
-            // XR legacy rendering (will de deprecated by XR SDK)
-            if (camera.stereoEnabled)
+            // XR legacy rendering (will be deprecated by XR SDK)
+            if (passInfo.xrDisplay == null && camera.stereoEnabled)
             {
                 switch (XRGraphics.stereoRenderingMode)
                 {
@@ -335,14 +336,34 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 cameraPosition = view.inverse.GetColumn(3);
             }
 
+            // Local function to read view parameters from XR SDK
+            void GetViewParameters(PassInfo passInfo, ref Matrix4x4 proj, ref Matrix4x4 view, ref Vector3 cameraPosition)
+            {
+                if (passInfo.xrDisplay.TryGetRenderPass(passInfo.renderPassIndex, out var renderPass))
+                {
+                    if (passInfo.xrDisplay.TryGetRenderParam(camera, passInfo.renderPassIndex, passInfo.renderParamIndex, out var renderParam))
+                    {
+                        proj = renderParam.projection;
+                        view = renderParam.view;
+                        cameraPosition = view.inverse.GetColumn(3);
+                    }
+                }
+            }
+
             // Update view constants
             {
                 var proj = camera.projectionMatrix;
                 var view = camera.worldToCameraMatrix;
                 var cameraPosition = camera.transform.position;
 
-                if (xrlegacyMultipassEnabled)
+                if (xrPassInfo.xrDisplay != null)
+                {
+                    GetViewParameters(xrPassInfo, ref proj, ref view, ref cameraPosition);
+                }
+                else if (xrlegacyMultipassEnabled)
+                {
                     GetLegacyStereoViewParameters((Camera.StereoscopicEye)xrLegacyMultipassEye, ref proj, ref view, ref cameraPosition);
+                }
 
                 UpdateViewConstants(ref mainViewConstants, proj, view, cameraPosition);
 
@@ -375,16 +396,38 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 isFirstFrame = false;
             }
 
-            // Update viewport sizes.
-            m_ViewportSizePrevFrame = new Vector2Int(m_ActualWidth, m_ActualHeight);
-            m_ActualWidth = Math.Max(camera.pixelWidth, 1);
-            m_ActualHeight = Math.Max(camera.pixelHeight, 1);
+            // Update viewport
+            {
+                finalViewport = new Rect(camera.pixelRect.x, camera.pixelRect.y, camera.pixelWidth, camera.pixelHeight);
+
+                // XR SDK override
+                if (xrPassInfo.xrDisplay != null)
+                {
+                    if (xrPassInfo.xrDisplay.TryGetRenderPass(xrPassInfo.renderPassIndex, out var renderPass))
+                    {
+                        if (xrPassInfo.xrDisplay.TryGetRenderParam(camera, xrPassInfo.renderPassIndex, xrPassInfo.renderParamIndex, out var renderParam))
+                        {
+                            // XRTODO: update viewport code once XR SDK is working
+                            //finalViewport = renderParam.viewport;
+
+                            finalViewport.x = 0;
+                            finalViewport.y = 0;
+                            finalViewport.width = renderPass.renderTargetDesc.width;
+                            finalViewport.height = renderPass.renderTargetDesc.height;
+                        }
+                    }
+                }
+
+                m_ViewportSizePrevFrame = new Vector2Int(m_ActualWidth, m_ActualHeight);
+                m_ActualWidth = Math.Max((int)finalViewport.size.x, 1);
+                m_ActualHeight = Math.Max((int)finalViewport.size.y, 1);
+            }
 
             Vector2Int nonScaledSize = new Vector2Int(m_ActualWidth, m_ActualHeight);
             if (isMainGameView)
             {
-                Vector2Int scaledSize = HDDynamicResolutionHandler.instance.GetRTHandleScale(new Vector2Int(camera.pixelWidth, camera.pixelHeight));
-                nonScaledSize = HDDynamicResolutionHandler.instance.cachedOriginalSize;
+                Vector2Int scaledSize = HDDynamicResolutionHandler.instance.GetRTHandleScale(new Vector2Int(m_ActualWidth, m_ActualHeight));
+                nonScaledSize = new Vector2Int((int)finalViewport.size.x, (int)finalViewport.size.y);
                 m_ActualWidth = scaledSize.x;
                 m_ActualHeight = scaledSize.y;
             }
@@ -401,6 +444,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 var xrDesc = XRGraphics.eyeTextureDesc;
                 nonScaledSize.x = screenWidth  = m_ActualWidth  = xrDesc.width;
                 nonScaledSize.y = screenHeight = m_ActualHeight = xrDesc.height;
+
+                finalViewport.width  = xrDesc.width;
+                finalViewport.height = xrDesc.height;
 
                 textureWidthScaling = new Vector4(2.0f, 0.5f, 0.0f, 0.0f);
             }
@@ -483,8 +529,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             screenSize = new Vector4(screenWidth, screenHeight, 1.0f / screenWidth, 1.0f / screenHeight);
             screenParams = new Vector4(screenSize.x, screenSize.y, 1 + screenSize.z, 1 + screenSize.w);
-
-            finalViewport = new Rect(camera.pixelRect.x, camera.pixelRect.y, nonScaledSize.x, nonScaledSize.y);
 
             if (vlSys != null)
             {
@@ -787,11 +831,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         }
 
         // Will return NULL if the camera does not exist.
-        public static HDCamera Get(Camera camera, int passIndex)
+        public static HDCamera Get(Camera camera, PassInfo passInfo)
         {
             HDCamera hdCamera;
 
-            if (!s_Cameras.TryGetValue(new MultipassCamera(camera, passIndex), out hdCamera))
+            if (!s_Cameras.TryGetValue(new MultipassCamera(camera, passInfo), out hdCamera))
             {
                 hdCamera = null;
             }
@@ -812,10 +856,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         // Pass all the systems that may want to initialize per-camera data here.
         // That way you will never create an HDCamera and forget to initialize the data.
-        public static HDCamera Create(Camera camera, int passIndex)
+        public static HDCamera Create(Camera camera, PassInfo passInfo)
         {
-            HDCamera hdCamera = new HDCamera(camera, passIndex);
-            s_Cameras.Add(new MultipassCamera(camera, passIndex), hdCamera);
+            HDCamera hdCamera = new HDCamera(camera, passInfo);
+            s_Cameras.Add(new MultipassCamera(camera, passInfo), hdCamera);
 
             return hdCamera;
         }

@@ -1784,14 +1784,25 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                 var worldToView = WorldToCamera(camera);
                 var rightEyeWorldToView = Matrix4x4.identity;
-                if (hdCamera.xrInstancingEnabled)
+
+                if (hdCamera.xrPassInfo.xrDisplay != null)
                 {
-                    worldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Left);
-                    rightEyeWorldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Right);
+                    if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
+                    {
+                        if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderParam(camera, hdCamera.xrPassInfo.renderPassIndex, hdCamera.xrPassInfo.renderParamIndex, out var renderParam))
+                        {
+                            worldToView = renderParam.view;
+                        }
+                    }
                 }
                 else if (hdCamera.xrlegacyMultipassEnabled)
                 {
                     worldToView = WorldToViewStereo(camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
+                }
+                else if (hdCamera.xrInstancingEnabled)
+                {
+                    worldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Left);
+                    rightEyeWorldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Right);
                 }
 
                 // We must clear the shadow requests before checking if they are any visible light because we would have requests from the last frame executed in the case where we don't see any lights
@@ -2353,10 +2364,24 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
             else
             {
-                if (hdCamera.xrlegacyMultipassEnabled)
+                if (hdCamera.xrPassInfo.xrDisplay != null)
+                {
+                    if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
+                    {
+                        if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderParam(camera, hdCamera.xrPassInfo.renderPassIndex, hdCamera.xrPassInfo.renderParamIndex, out var renderParam))
+                        {
+                            m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(renderParam.projection);
+                        }
+                    }
+                }
+                else if (hdCamera.xrlegacyMultipassEnabled)
+                {
                     m_LightListProjMatrices[0] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
+                }
                 else
-                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera);
+                {
+                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera.projectionMatrix);
+                }
 
                 m_LightListProjscrMatrices[0] = temp * m_LightListProjMatrices[0];
                 m_LightListInvProjscrMatrices[0] = m_LightListProjscrMatrices[0].inverse;
