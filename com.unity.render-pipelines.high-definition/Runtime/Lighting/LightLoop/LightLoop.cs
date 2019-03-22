@@ -1789,7 +1789,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 {
                     hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
                     renderPass.GetRenderParameter(camera, hdCamera.xrPassInfo.renderParamIndex, out var renderParam);
-                    worldToView = renderParam.view;
+                    worldToView = Matrix4x4.Scale(new Vector3(1, 1, -1)) * renderParam.view;
                 }
                 else if (hdCamera.xrlegacyMultipassEnabled)
                 {
