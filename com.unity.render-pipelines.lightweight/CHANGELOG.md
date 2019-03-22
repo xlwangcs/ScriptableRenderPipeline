@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Exposed stencil render state in the renderer.
 - The default layer mask is now applied to a depth pre-pass.
 - Several improvements and fixes to the render pass UI.
-- Fixed artifacts appearing due to precision errors in large scaled objects.
+- Fixed artifacts that appeared due to precision errors in large scaled objects.
 
 ## [6.5.0] - 2019-03-07
 ### Added
