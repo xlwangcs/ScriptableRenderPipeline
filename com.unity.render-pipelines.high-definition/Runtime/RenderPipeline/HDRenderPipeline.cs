@@ -1070,10 +1070,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     RenderTargetIdentifier targetId = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget);
                     if (multipassCamera.passInfo.xrDisplay != null)
                     {
-                        if (multipassCamera.passInfo.xrDisplay.TryGetRenderPass(multipassCamera.passInfo.renderPassIndex, out var renderPass))
-                        {
-                            targetId = renderPass.renderTarget;
-                        }
+                        multipassCamera.passInfo.xrDisplay.GetRenderPass(multipassCamera.passInfo.renderPassIndex, out var renderPass);
+                        targetId = renderPass.renderTarget;
                     }
 
                     // Add render request
@@ -1942,6 +1940,13 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 StopStereoRendering(cmd, renderContext, hdCamera);
             }
 
+            // XR SDK mirror view
+            if (hdCamera.xrPassInfo.xrDisplay != null && camera.targetTexture == null)
+            {
+                if (hdCamera.xrPassInfo.renderPassIndex == m_CurrentDebugDisplaySettings.data.xrDebugSettings.mirrorPassIndex)
+                    BlitFinalCameraTexture(cmd, hdCamera, new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
+            }
+
             // Pushes to XR headset and/or display mirror
             if (camera.stereoEnabled)
             {
@@ -2168,11 +2173,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             if (multipassCamera.passInfo.xrDisplay != null)
             {
-                if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
-                {
-                    if (!hdCamera.xrPassInfo.xrDisplay.TryGetCullingParams(camera, renderPass.cullingPassIndex, out cullingParams))
-                        return false;
-                }
+                hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
+                hdCamera.xrPassInfo.xrDisplay.GetCullingParameters(camera, renderPass.cullingPassIndex, out cullingParams);
+
+                // should return false if invalid
             }
             else
             {

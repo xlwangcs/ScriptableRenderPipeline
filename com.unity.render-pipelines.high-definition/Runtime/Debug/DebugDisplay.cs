@@ -46,12 +46,14 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         static string k_PanelLighting = "Lighting";
         static string k_PanelRendering = "Rendering";
         static string k_PanelDecals = "Decals";
+        static string k_PanelXR = "XR";
 
         DebugUI.Widget[] m_DebugDisplayStatsItems;
         DebugUI.Widget[] m_DebugMaterialItems;
         DebugUI.Widget[] m_DebugLightingItems;
         DebugUI.Widget[] m_DebugRenderingItems;
         DebugUI.Widget[] m_DebugDecalsItems;
+        DebugUI.Widget[] m_DebugXRItems;
 
         static GUIContent[] s_LightingFullScreenDebugStrings = null;
         static int[] s_LightingFullScreenDebugValues = null;
@@ -81,6 +83,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public ColorPickerDebugSettings colorPickerDebugSettings = new ColorPickerDebugSettings();
             public FalseColorDebugSettings falseColorDebugSettings = new FalseColorDebugSettings();
             public DecalsDebugSettings decalsDebugSettings = new DecalsDebugSettings();
+            public XRDebugSettings xrDebugSettings = new XRDebugSettings();
             public MSAASamples msaaSamples = MSAASamples.None;
 
             // Raytracing
@@ -384,6 +387,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             UnregisterDebugItems(k_PanelDecals, m_DebugDecalsItems);
             RegisterDecalsDebug();
+        }
+
+        void RefreshXRDebug<T>(DebugUI.Field<T> field, T value)
+        {
+            UnregisterDebugItems(k_PanelXR, m_DebugXRItems);
+            RegisterXRDebug();
         }
 
         void RefreshRenderingDebug<T>(DebugUI.Field<T> field, T value)
@@ -694,6 +703,17 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             panel.children.Add(m_DebugDecalsItems);
         }
 
+        public void RegisterXRDebug()
+        {
+            m_DebugXRItems = new DebugUI.Widget[]
+            {
+                new DebugUI.UIntField { displayName = "Mirror pass", getter = () => data.xrDebugSettings.mirrorPassIndex, setter = value => data.xrDebugSettings.mirrorPassIndex = value }
+            };
+
+            var panel = DebugManager.instance.GetPanel(k_PanelXR, true);
+            panel.children.Add(m_DebugXRItems);
+        }
+
         public void RegisterDebug()
         {
             RegisterDecalsDebug();
@@ -701,6 +721,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             RegisterMaterialDebug();
             RegisterLightingDebug();
             RegisterRenderingDebug();
+            RegisterXRDebug();
             DebugManager.instance.RegisterData(this);
         }
 
@@ -711,6 +732,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             UnregisterDebugItems(k_PanelMaterials, m_DebugMaterialItems);
             UnregisterDebugItems(k_PanelLighting, m_DebugLightingItems);
             UnregisterDebugItems(k_PanelRendering, m_DebugRenderingItems);
+            UnregisterDebugItems(k_PanelXR, m_DebugXRItems);
             DebugManager.instance.UnregisterData(this);
         }
 

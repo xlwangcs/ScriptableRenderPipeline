@@ -1787,13 +1787,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                 if (hdCamera.xrPassInfo.xrDisplay != null)
                 {
-                    if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
-                    {
-                        if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderParam(camera, hdCamera.xrPassInfo.renderPassIndex, hdCamera.xrPassInfo.renderParamIndex, out var renderParam))
-                        {
-                            worldToView = renderParam.view;
-                        }
-                    }
+                    hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
+                    renderPass.GetRenderParameter(camera, hdCamera.xrPassInfo.renderParamIndex, out var renderParam);
+                    worldToView = renderParam.view;
                 }
                 else if (hdCamera.xrlegacyMultipassEnabled)
                 {
@@ -2366,13 +2362,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 if (hdCamera.xrPassInfo.xrDisplay != null)
                 {
-                    if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass))
-                    {
-                        if (hdCamera.xrPassInfo.xrDisplay.TryGetRenderParam(camera, hdCamera.xrPassInfo.renderPassIndex, hdCamera.xrPassInfo.renderParamIndex, out var renderParam))
-                        {
-                            m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(renderParam.projection);
-                        }
-                    }
+                    hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
+                    renderPass.GetRenderParameter(camera, hdCamera.xrPassInfo.renderParamIndex, out var renderParam);
+                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(renderParam.projection);
                 }
                 else if (hdCamera.xrlegacyMultipassEnabled)
                 {

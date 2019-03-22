@@ -339,15 +339,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // Local function to read view parameters from XR SDK
             void GetViewParameters(PassInfo passInfo, ref Matrix4x4 proj, ref Matrix4x4 view, ref Vector3 cameraPosition)
             {
-                if (passInfo.xrDisplay.TryGetRenderPass(passInfo.renderPassIndex, out var renderPass))
-                {
-                    if (passInfo.xrDisplay.TryGetRenderParam(camera, passInfo.renderPassIndex, passInfo.renderParamIndex, out var renderParam))
-                    {
-                        proj = renderParam.projection;
-                        view = renderParam.view;
-                        cameraPosition = view.inverse.GetColumn(3);
-                    }
-                }
+                passInfo.xrDisplay.GetRenderPass(passInfo.renderPassIndex, out var renderPass);
+                renderPass.GetRenderParameter(camera, passInfo.renderParamIndex, out var renderParam);
+
+                proj = renderParam.projection;
+                view = renderParam.view;
+                cameraPosition = view.inverse.GetColumn(3);
             }
 
             // Update view constants
@@ -403,19 +400,16 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // XR SDK override
                 if (xrPassInfo.xrDisplay != null)
                 {
-                    if (xrPassInfo.xrDisplay.TryGetRenderPass(xrPassInfo.renderPassIndex, out var renderPass))
-                    {
-                        if (xrPassInfo.xrDisplay.TryGetRenderParam(camera, xrPassInfo.renderPassIndex, xrPassInfo.renderParamIndex, out var renderParam))
-                        {
-                            // XRTODO: update viewport code once XR SDK is working
-                            //finalViewport = renderParam.viewport;
+                    xrPassInfo.xrDisplay.GetRenderPass(xrPassInfo.renderPassIndex, out var renderPass);
+                    renderPass.GetRenderParameter(camera, xrPassInfo.renderParamIndex, out var renderParam);
 
-                            finalViewport.x = 0;
-                            finalViewport.y = 0;
-                            finalViewport.width = renderPass.renderTargetDesc.width;
-                            finalViewport.height = renderPass.renderTargetDesc.height;
-                        }
-                    }
+                    // XRTODO: update viewport code once XR SDK is working
+                    //finalViewport = renderParam.viewport;
+
+                    finalViewport.x = 0;
+                    finalViewport.y = 0;
+                    finalViewport.width = renderPass.renderTargetDesc.width;
+                    finalViewport.height = renderPass.renderTargetDesc.height;
                 }
 
                 m_ViewportSizePrevFrame = new Vector2Int(m_ActualWidth, m_ActualHeight);

@@ -43,16 +43,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 {
                     for (int renderPassIndex = 0; renderPassIndex < xrDisplay.GetRenderPassCount(); ++renderPassIndex)
                     {
-                        if (xrDisplay.TryGetRenderPass(renderPassIndex, out var renderPass))
+                        xrDisplay.GetRenderPass(renderPassIndex, out var renderPass);
+                        for (int renderParamIndex = 0; renderParamIndex < renderPass.GetRenderParameterCount(); ++renderParamIndex)
                         {
-                            for (int renderParamIndex = 0; renderParamIndex < xrDisplay.GetRenderParamCount(renderPassIndex); ++renderParamIndex)
-                            {
-                                if (xrDisplay.TryGetRenderParam(camera, renderPassIndex, renderParamIndex, out var renderParam))
-                                {
-                                    PassInfo passInfo = new PassInfo(xrDisplay, renderPassIndex, renderParamIndex);
-                                    multipassCameras.Add(new MultipassCamera(camera, passInfo));
-                                }
-                            }
+                            //renderPass.GetRenderParameter(camera, renderParamIndex, out var renderParam);
+                            PassInfo passInfo = new PassInfo(xrDisplay, renderPassIndex, renderParamIndex);
+                            multipassCameras.Add(new MultipassCamera(camera, passInfo));
                         }
                     }
                 }
