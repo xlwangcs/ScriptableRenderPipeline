@@ -7,19 +7,19 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
     // Used as key in Dictionary
     public struct MultipassCamera : IEquatable<MultipassCamera>
     {
-        private Camera m_Camera;
-        private int    m_PassId;
+        private readonly Camera m_Camera;
+        private readonly int    m_PassId;
+        private readonly int    m_CachedHashCode;
 
-        public MultipassCamera(Camera camera)
-        {
-            m_Camera = camera;
-            m_PassId = -1;
-        }
-
-        public MultipassCamera(Camera camera, int passId)
+        public MultipassCamera(Camera camera, int passId = -1)
         {
             m_Camera = camera;
             m_PassId = passId;
+
+            // Compute the hash code once and store it (all variables must be readonly)
+            // Note: camera can be deleted at any time and without caching,
+            // the hash code could change and impact the usage of this struct as Key in a Dictionary
+            m_CachedHashCode = ComputeHashCode(camera, passId);
         }
 
         public Camera camera { get { return m_Camera; } }
@@ -50,13 +50,17 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         public override int GetHashCode()
         {
+            return m_CachedHashCode;
+        }
+
+        private static int ComputeHashCode(Camera camera, int passId)
+        {
             int hash = 13;
 
             unchecked
             {
                 hash = hash * 23 + passId;
-                if (camera != null)
-                    hash = hash * 23 + camera.GetHashCode();
+                hash = hash * 23 + camera.GetHashCode();
             }
 
             return hash;
