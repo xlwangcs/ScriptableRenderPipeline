@@ -148,7 +148,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _EnvCubemapTextures = Shader.PropertyToID("_EnvCubemapTextures");
         public static readonly int _EnvSliceSize = Shader.PropertyToID("_EnvSliceSize");
         public static readonly int _CookieSizePOT = Shader.PropertyToID("_CookieSizePOT");
-        public static readonly int _Env2DTextures = Shader.PropertyToID("_Env2DTextures"); 
+        public static readonly int _Env2DTextures = Shader.PropertyToID("_Env2DTextures");
         public static readonly int _Env2DCaptureVP = Shader.PropertyToID("_Env2DCaptureVP");
         public static readonly int _Env2DCaptureForward = Shader.PropertyToID("_Env2DCaptureForward");
         public static readonly int _DirectionalLightDatas = Shader.PropertyToID("_DirectionalLightDatas");
@@ -374,10 +374,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _DistortionTexture = Shader.PropertyToID("_DistortionTexture");
         public static readonly int _ColorPyramidTexture = Shader.PropertyToID("_ColorPyramidTexture");
         public static readonly int _DepthPyramidTexture = Shader.PropertyToID("_DepthPyramidTexture");
-        public static readonly int _ColorPyramidSize = Shader.PropertyToID("_ColorPyramidSize");
         public static readonly int _ColorPyramidScale = Shader.PropertyToID("_ColorPyramidScale");
         public static readonly int _ColorPyramidUvScaleAndLimitPrevFrame = Shader.PropertyToID("_ColorPyramidUvScaleAndLimitPrevFrame");
-        public static readonly int _DepthPyramidSize = Shader.PropertyToID("_DepthPyramidSize");
         public static readonly int _DepthPyramidScale = Shader.PropertyToID("_DepthPyramidScale");
 
         public static readonly int _DebugColorPickerTexture = Shader.PropertyToID("_DebugColorPickerTexture");
@@ -471,7 +469,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _VolumeMaskAtlas                = Shader.PropertyToID("_VolumeMaskAtlas");
         public static readonly int _VolumeMaskDimensions           = Shader.PropertyToID("_VolumeMaskDimensions");
 
-        public static readonly int _EnableLightLayers              = Shader.PropertyToID("_EnableLightLayers"); 
+        public static readonly int _EnableLightLayers              = Shader.PropertyToID("_EnableLightLayers");
         public static readonly int _OffScreenRendering             = Shader.PropertyToID("_OffScreenRendering");
         public static readonly int _EnableSpecularLighting         = Shader.PropertyToID("_EnableSpecularLighting");
 
@@ -533,7 +531,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _RaytracedIndirectDiffuse        = Shader.PropertyToID("_RaytracedIndirectDiffuse");
         public static readonly int _IndirectDiffuseTexture          = Shader.PropertyToID("_IndirectDiffuseTexture");
         public static readonly int _IndirectDiffuseTextureRW        = Shader.PropertyToID("_IndirectDiffuseTextureRW");
-        
+
 #else
         public static readonly int _RaytracedAreaShadow             = Shader.PropertyToID("_RaytracedAreaShadow");
 #endif
