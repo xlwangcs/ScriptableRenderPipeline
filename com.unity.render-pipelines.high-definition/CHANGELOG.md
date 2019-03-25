@@ -45,7 +45,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed issue when switching mode in ReflectionProbe and PlanarReflectionProbe
 - Fixed issue where migratable component version where not always serialized when part of prefab's instance
 - Fixed an issue where shadow would not be rendered properly when light layer are not enabled
+- Fixed exposure weight on unlit materials
 - Fixed Light intensity not played in the player when recorded with animation/timeline
+- Fixed some issues when multi editing HDRenderPipelineAsset
+- Fixed emission node breaking the main shader graph preview in certain conditions.
+- Fixed checkout of baked probe asset when baking probes.
 
 ### Changed
 - DensityVolume scripting API will no longuer allow to change between advance and normal edition mode
