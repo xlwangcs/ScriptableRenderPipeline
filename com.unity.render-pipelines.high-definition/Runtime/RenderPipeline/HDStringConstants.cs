@@ -436,6 +436,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public static readonly int _EnableDistantFog               = Shader.PropertyToID("_EnableDistantFog");
         public static readonly int _GlobalFogAnisotropy            = Shader.PropertyToID("_GlobalFogAnisotropy");
         public static readonly int _CornetteShanksConstant         = Shader.PropertyToID("_CornetteShanksConstant");
+        public static readonly int _RcpInstancedViewCount          = Shader.PropertyToID("_RcpInstancedViewCount");
         public static readonly int _VBufferResolution              = Shader.PropertyToID("_VBufferResolution");
         public static readonly int _VBufferSliceCount              = Shader.PropertyToID("_VBufferSliceCount");
         public static readonly int _VBufferRcpSliceCount           = Shader.PropertyToID("_VBufferRcpSliceCount");

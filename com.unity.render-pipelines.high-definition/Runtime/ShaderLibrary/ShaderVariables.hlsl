@@ -268,7 +268,7 @@ CBUFFER_START(UnityGlobal)
     float4 _VBufferResolution;          // { w, h, 1/w, 1/h }
     uint   _VBufferSliceCount;
     float  _VBufferRcpSliceCount;
-    float  _Pad2;
+    float  _RcpInstancedViewCount;
     float  _Pad3;
     float4 _VBufferUvScaleAndLimit;     // Necessary us to work with sub-allocation (resource aliasing) in the RTHandle system
     float4 _VBufferDistanceEncodingParams; // See the call site for description

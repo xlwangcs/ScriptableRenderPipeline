@@ -4,7 +4,6 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine.Experimental.GlobalIllumination;
-using UnityEngine.Experimental.XR;
 using UnityEngine;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
@@ -191,9 +190,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         readonly LightLoop m_LightLoop = new LightLoop();
         readonly VolumetricLightingSystem m_VolumetricLightingSystem = new VolumetricLightingSystem();
         readonly AmbientOcclusionSystem m_AmbientOcclusionSystem;
-
-        // XR SDK
-        private List<XRDisplaySubsystem> m_XRDisplayList = new List<XRDisplaySubsystem>();
 
         // Debugging
         MaterialPropertyBlock m_SharedPropertyBlock = new MaterialPropertyBlock();
@@ -767,7 +763,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             bool resolutionChanged = (hdCamera.actualWidth != m_CurrentWidth) || (hdCamera.actualHeight != m_CurrentHeight);
 
-            if (resolutionChanged || m_LightLoop.NeedResize())
+            if (resolutionChanged || m_LightLoop.NeedResize(hdCamera.viewCount))
             {
                 if (m_CurrentWidth > 0 && m_CurrentHeight > 0)
                     m_LightLoop.ReleaseResolutionDependentBuffers();
@@ -983,15 +979,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
-            // Refresh XR SDK displays
-            SubsystemManager.GetInstances(m_XRDisplayList);
-            XRDisplaySubsystem xrDisplay = null;
-            if (m_XRDisplayList.Count > 0)
-            {
-                xrDisplay = m_XRDisplayList[0];
-                xrDisplay.disableLegacyRenderer = true;
-            }
-
 			// TODO: Check with Fred if it make sense to put that here now that we have refactor the loop
 #if ENABLE_RAYTRACING
             // This call need to happen once per frame, it evaluates if we need to fetch the geometry/lights for some subscenes
@@ -1011,10 +998,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             using (DictionaryPool<HDProbe, List<int>>.Get(out Dictionary<HDProbe, List<int>> renderRequestIndicesWhereTheProbeIsVisible))
             using (ListPool<CameraSettings>.Get(out List<CameraSettings> cameraSettings))
             using (ListPool<CameraPositionSettings>.Get(out List<CameraPositionSettings> cameraPositionSettings))
-
+            using (ListPool<MultipassCamera>.Get(out List<MultipassCamera> multipassCameras))
             {
                 // With XR multi-pass enabled, each camera can be rendered multiple times with different parameters
-                var multipassCameras = MultipassCamera.SetupFrame(cameras, xrDisplay);
+                XRSystem.SetupFrame(cameras, ref multipassCameras);
 
                 // Culling loop
                 foreach(var multipassCamera in multipassCameras)
@@ -1068,10 +1055,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                     // Select render target
                     RenderTargetIdentifier targetId = camera.targetTexture ?? new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget);
-                    if (multipassCamera.passInfo.xrDisplay != null)
+
+                    if (hdCamera.xr.enabled && hdCamera.xr.renderTargetValid)
                     {
-                        multipassCamera.passInfo.xrDisplay.GetRenderPass(multipassCamera.passInfo.renderPassIndex, out var renderPass);
-                        targetId = renderPass.renderTarget;
+                        targetId = hdCamera.xr.renderTarget;
                     }
 
                     // Add render request
@@ -1436,6 +1423,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
             }
 
+            XRSystem.ReleaseFrame();
             UnityEngine.Rendering.RenderPipeline.EndFrameRendering(renderContext, cameras);
         }
 
@@ -1530,7 +1518,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // Configure all the keywords
             ConfigureKeywords(enableBakeShadowMask, hdCamera, cmd);
 
-            StartStereoRendering(cmd, renderContext, hdCamera);
+            hdCamera.xr.StartLegacyStereo(camera, cmd, renderContext);
 
             ClearBuffers(hdCamera, cmd);
 
@@ -1574,7 +1562,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             RenderCameraVelocity(cullingResults, hdCamera, renderContext, cmd);
 
-            StopStereoRendering(cmd, renderContext, hdCamera);
+            hdCamera.xr.StopLegacyStereo(camera, cmd, renderContext);
             // Caution: We require sun light here as some skies use the sun light to render, it means that UpdateSkyEnvironment must be called after PrepareLightsForGPU.
             // TODO: Try to arrange code so we can trigger this call earlier and use async compute here to run sky convolution during other passes (once we move convolution shader to compute).
             UpdateSkyEnvironment(hdCamera, cmd);
@@ -1587,13 +1575,13 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             if (m_CurrentDebugDisplaySettings.IsDebugMaterialDisplayEnabled() || m_CurrentDebugDisplaySettings.IsMaterialValidationEnabled())
             {
-                StartStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StartLegacyStereo(camera, cmd, renderContext);
                 RenderDebugViewMaterial(cullingResults, hdCamera, renderContext, cmd);
-                StopStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StopLegacyStereo(camera, cmd, renderContext);
             }
             else
             {
-                StartStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StartLegacyStereo(camera, cmd, renderContext);
 
                 if (!hdCamera.frameSettings.SSAORunsAsync())
                     m_AmbientOcclusionSystem.Render(cmd, hdCamera, m_SharedRTManager, renderContext, m_FrameCount);
@@ -1692,7 +1680,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     PushFullScreenDebugTexture(hdCamera, cmd, m_ScreenSpaceShadowsBuffer, FullScreenDebugMode.ContactShadows);
                 }
 
-                StopStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StopLegacyStereo(camera, cmd, renderContext);
 
                 var buildLightListTask = new HDGPUAsyncTask("Build light list", ComputeQueueType.Background);
                 // It is important that this task is in the same queue as the build light list due to dependency it has on it. If really need to move it, put an extra fence to make sure buildLightListTask has finished.
@@ -1828,7 +1816,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 }
 
                 // Might float this higher if we enable stereo w/ deferred
-                StartStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StartLegacyStereo(camera, cmd, renderContext);
 
 #if (ENABLE_RAYTRACING)
                 {
@@ -1912,7 +1900,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 AccumulateDistortion(cullingResults, hdCamera, renderContext, cmd);
                 RenderDistortion(hdCamera, cmd);
 
-                StopStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StopLegacyStereo(camera, cmd, renderContext);
 
                 PushFullScreenDebugTexture(hdCamera, cmd, m_CameraColorBuffer, FullScreenDebugMode.NanTracker);
                 PushFullScreenLightingDebugTexture(hdCamera, cmd, m_CameraColorBuffer);
@@ -1929,7 +1917,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 hdCamera.ExecuteCaptureActions(m_IntermediateAfterPostProcessBuffer, cmd);
 
-                StartStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StartLegacyStereo(camera, cmd, renderContext);
 
                 RenderDebug(hdCamera, cmd, cullingResults);
                 using (new ProfilingSample(cmd, "Final Blit (Dev Build Only)"))
@@ -1937,28 +1925,19 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     BlitFinalCameraTexture(cmd, hdCamera, target.id);
                 }
 
-                StopStereoRendering(cmd, renderContext, hdCamera);
+                hdCamera.xr.StopLegacyStereo(camera, cmd, renderContext);
             }
 
             // XR SDK mirror view
-            if (hdCamera.xrPassInfo.xrDisplay != null && camera.targetTexture == null)
+            // XRTODO: clean, use own shader? move to XRSystem
+            //if (hdCamera.xrPassInfo.xrDisplay != null && camera.targetTexture == null)
+            if (hdCamera.xr.xrSdkEnabled)
             {
-                if (hdCamera.xrPassInfo.renderPassIndex == m_CurrentDebugDisplaySettings.data.xrDebugSettings.mirrorPassIndex)
+                //if (hdCamera.xrPassInfo.renderPassIndex == m_CurrentDebugDisplaySettings.data.xrDebugSettings.mirrorPassIndex)
                     BlitFinalCameraTexture(cmd, hdCamera, new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget));
             }
 
-            // Pushes to XR headset and/or display mirror
-            if (camera.stereoEnabled)
-            {
-                // XRTODO: why is this needed?
-                renderContext.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-
-                if (hdCamera.xrlegacyMultipassEnabled)
-                    renderContext.StereoEndRender(camera, hdCamera.xrLegacyMultipassEye, hdCamera.xrLegacyMultipassEye == 1);
-                else
-                    renderContext.StereoEndRender(camera);
-            }
+            hdCamera.xr.EndCamera(camera, renderContext, cmd);
 
             // Send all required graphics buffer to client systems.
             SendGraphicsBuffers(cmd, hdCamera);
@@ -2017,6 +1996,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             HDUtils.DrawFullScreen(cmd, hdCamera.finalViewport, HDUtils.GetBlitMaterial(m_IntermediateAfterPostProcessBuffer.rt.dimension), destination, m_BlitPropertyBlock, 0);
         }
 
+        // XRTODO: is this needed only for legacy?
         void SetupCameraProperties(HDCamera hdCamera, ScriptableRenderContext renderContext, CommandBuffer cmd)
         {
             // The next 2 functions are required to flush the command buffer before calling functions directly on the render context.
@@ -2024,10 +2004,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
 
-            if (hdCamera.xrlegacyMultipassEnabled)
-                renderContext.SetupCameraProperties(hdCamera.camera, hdCamera.camera.stereoEnabled, hdCamera.xrLegacyMultipassEye);
+            if (hdCamera.xr.legacyMultipassEnabled)
+                renderContext.SetupCameraProperties(hdCamera.camera, hdCamera.xr.enabled, hdCamera.xr.legacyMultipassEye);
             else
-                renderContext.SetupCameraProperties(hdCamera.camera, hdCamera.camera.stereoEnabled);
+                renderContext.SetupCameraProperties(hdCamera.camera, hdCamera.xr.enabled);
         }
 
         void InitializeGlobalResources(ScriptableRenderContext renderContext)
@@ -2163,7 +2143,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 currentFrameSettings.SetEnabled(FrameSettingsField.ObjectMotionVectors, false);
             }
 
-            hdCamera = HDCamera.Get(camera, multipassCamera.passInfo) ?? HDCamera.Create(camera, multipassCamera.passInfo);
+            hdCamera = HDCamera.Get(camera, multipassCamera.passId) ?? HDCamera.Create(camera, multipassCamera.passId);
             // From this point, we should only use frame settings from the camera
             hdCamera.Update(currentFrameSettings, m_VolumetricLightingSystem, m_MSAASamples);
 
@@ -2171,14 +2151,19 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (additionalCameraData != null && additionalCameraData.hasCustomRender)
                 return false;
 
-            if (multipassCamera.passInfo.xrDisplay != null)
+            if (hdCamera.xr.enabled)
             {
-                hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
-                hdCamera.xrPassInfo.xrDisplay.GetCullingParameters(camera, renderPass.cullingPassIndex, out cullingParams);
-
-                // should return false if invalid
+                //cullingParams = hdCamera.xr.cullingParameters;
             }
-            else
+
+            //if (multipassCamera.passInfo.xrDisplay != null)
+            //{
+            //    hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
+            //    hdCamera.xrPassInfo.xrDisplay.GetCullingParameters(camera, renderPass.cullingPassIndex, out cullingParams);
+
+            //    // should return false if invalid
+            //}
+            //else
             {
                 // XRTODO: remove stereo passdown?
                 if (!camera.TryGetCullingParameters(camera.stereoEnabled, out cullingParams))
@@ -3412,7 +3397,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             bool flipInPostProcesses = HDUtils.PostProcessIsFinalPass() && (hdCamera.flipYMode == HDAdditionalCameraData.FlipYMode.ForceFlipY || hdCamera.isMainGameView);
             RenderTargetIdentifier destination = HDUtils.PostProcessIsFinalPass() ? finalRT : m_IntermediateAfterPostProcessBuffer;
 
-            StartStereoRendering(cmd, renderContext, hdCamera);
+            hdCamera.xr.StartLegacyStereo(hdCamera.camera, cmd, renderContext);
 
             // We render AfterPostProcess objects first into a separate buffer that will be composited in the final post process pass
             RenderAfterPostProcess(cullResults, hdCamera, renderContext, cmd);
@@ -3433,7 +3418,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 flipY: flipInPostProcesses
             );
 
-            StopStereoRendering(cmd, renderContext, hdCamera);
+            hdCamera.xr.StopLegacyStereo(hdCamera.camera, cmd, renderContext);
         }
 
 
@@ -3461,34 +3446,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // Setup off-screen transparency here
                 RenderTransparentRenderList(cullResults, hdCamera, renderContext, cmd, HDShaderPassNames.s_ForwardOnlyName, 0, HDRenderQueue.k_RenderQueue_AfterPostProcessTransparent);
                 cmd.SetGlobalInt(HDShaderIDs._OffScreenRendering, 0);
-            }
-        }
-
-        void StartStereoRendering(CommandBuffer cmd, ScriptableRenderContext renderContext, HDCamera hdCamera)
-        {
-            if (hdCamera.camera.stereoEnabled)
-            {
-                // Reset scissor and viewport for C++ stereo code
-                cmd.DisableScissorRect();
-                cmd.SetViewport(hdCamera.camera.pixelRect);
-
-                renderContext.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-
-                if (hdCamera.xrlegacyMultipassEnabled)
-                    renderContext.StartMultiEye(hdCamera.camera, hdCamera.xrLegacyMultipassEye);
-                else
-                    renderContext.StartMultiEye(hdCamera.camera);
-            }
-        }
-
-        void StopStereoRendering(CommandBuffer cmd, ScriptableRenderContext renderContext, HDCamera hdCamera)
-        {
-            if (hdCamera.camera.stereoEnabled)
-            {
-                renderContext.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-                renderContext.StopMultiEye(hdCamera.camera);
             }
         }
 

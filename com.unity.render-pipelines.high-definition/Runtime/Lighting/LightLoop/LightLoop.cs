@@ -161,7 +161,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         public const int k_MaxDecalsOnScreen = 512;
         public const int k_MaxLightsOnScreen = k_MaxDirectionalLightsOnScreen + k_MaxPunctualLightsOnScreen + k_MaxAreaLightsOnScreen + k_MaxEnvLightsOnScreen;
         public const int k_MaxEnvLightsOnScreen = 64;
-        public const int k_MaxStereoEyes = 2;
         public static readonly Vector3 k_BoxCullingExtentThreshold = Vector3.one * 0.01f;
 
         #if UNITY_SWITCH
@@ -228,14 +227,14 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             }
         }
 
-        // Matrix used for Light list building
-        // Keep them around to avoid allocations
-        Matrix4x4[] m_LightListProjMatrices = new Matrix4x4[2];
-        Matrix4x4[] m_LightListProjscrMatrices = new Matrix4x4[2];
-        Matrix4x4[] m_LightListInvProjscrMatrices = new Matrix4x4[2];
-
-        Matrix4x4[] m_LightListProjHMatrices = new Matrix4x4[2];
-        Matrix4x4[] m_LightListInvProjHMatrices = new Matrix4x4[2];
+        int m_MaxViewCount = 0;
+        
+        // Matrix used for LightList building, keep them around to avoid allocations
+        Matrix4x4[] m_LightListProjMatrices;
+        Matrix4x4[] m_LightListProjscrMatrices;
+        Matrix4x4[] m_LightListInvProjscrMatrices;
+        Matrix4x4[] m_LightListProjHMatrices;
+        Matrix4x4[] m_LightListInvProjHMatrices;
 
         public class LightList
         {
@@ -600,17 +599,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             m_EnvLightDatas = new ComputeBuffer(m_MaxEnvLightsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(EnvLightData)));
             m_DecalDatas = new ComputeBuffer(m_MaxDecalsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(DecalData)));
 
-            // The bounds and light volumes are view-dependent, and AABB is additionally projection dependent.
-            // The view and proj matrices are per eye in stereo. This means we have to double the size of these buffers.
-            // TODO: Maybe in stereo, we will only support half as many lights total, in order to minimize buffer size waste.
-            // Alternatively, we could re-size these buffers if any stereo camera is active, instead of unilaterally increasing buffer size.
-            // TODO: I don't think k_MaxLightsOnScreen corresponds to the actual correct light count for cullable light types (punctual, area, env, decal)
-            s_AABBBoundsBuffer = new ComputeBuffer(k_MaxStereoEyes * 2 * m_MaxLightsOnScreen, 4 * sizeof(float));
-            s_ConvexBoundsBuffer = new ComputeBuffer(k_MaxStereoEyes * m_MaxLightsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(SFiniteLightBound)));
-            s_LightVolumeDataBuffer = new ComputeBuffer(k_MaxStereoEyes * m_MaxLightsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(LightVolumeData)));
-            // Need 3 ints for DispatchIndirect, but need 4 ints for DrawInstancedIndirect.
-            s_DispatchIndirectBuffer = new ComputeBuffer(LightDefinitions.s_NumFeatureVariants * 4, sizeof(uint), ComputeBufferType.IndirectArguments);
-
             s_GlobalLightListAtomic = new ComputeBuffer(1, sizeof(uint));
 
             s_LightList = null;
@@ -728,11 +716,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             ReleaseResolutionDependentBuffers();
 
-            CoreUtils.SafeRelease(s_AABBBoundsBuffer);
-            CoreUtils.SafeRelease(s_ConvexBoundsBuffer);
-            CoreUtils.SafeRelease(s_LightVolumeDataBuffer);
-            CoreUtils.SafeRelease(s_DispatchIndirectBuffer);
-
             // enableClustered
             CoreUtils.SafeRelease(s_GlobalLightListAtomic);
 
@@ -811,11 +794,13 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             m_ReflectionPlanarProbeCache.NewFrame();
         }
 
-        public bool NeedResize()
+        public bool NeedResize(int viewCount)
         {
             return s_LightList == null || s_TileList == null || s_TileFeatureFlags == null ||
+                s_AABBBoundsBuffer == null || s_ConvexBoundsBuffer == null || s_LightVolumeDataBuffer == null ||
                 (s_BigTileLightList == null && m_FrameSettings.IsEnabled(FrameSettingsField.BigTilePrepass)) ||
-                (s_PerVoxelLightLists == null);
+                (s_DispatchIndirectBuffer == null && m_FrameSettings.IsEnabled(FrameSettingsField.DeferredTile)) ||
+                (s_PerVoxelLightLists == null) || (viewCount > m_MaxViewCount);
         }
 
         public void ReleaseResolutionDependentBuffers()
@@ -831,6 +816,15 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             // enableBigTilePrepass
             CoreUtils.SafeRelease(s_BigTileLightList);
+
+            // LightList building
+            CoreUtils.SafeRelease(s_AABBBoundsBuffer);
+            CoreUtils.SafeRelease(s_ConvexBoundsBuffer);
+            CoreUtils.SafeRelease(s_LightVolumeDataBuffer);
+            CoreUtils.SafeRelease(s_DispatchIndirectBuffer);
+
+            // reset 
+            m_MaxViewCount = 0;
         }
 
         int NumLightIndicesPerClusteredTile()
@@ -840,10 +834,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
         public void AllocResolutionDependentBuffers(int width, int height, HDCamera hdCamera)
         {
-            var nrViews = hdCamera.xrViewCount;
+            m_MaxViewCount = hdCamera.viewCount;
             var nrTilesX = (width + LightDefinitions.s_TileSizeFptl - 1) / LightDefinitions.s_TileSizeFptl;
             var nrTilesY = (height + LightDefinitions.s_TileSizeFptl - 1) / LightDefinitions.s_TileSizeFptl;
-            var nrTiles = nrTilesX * nrTilesY * nrViews;
+            var nrTiles = nrTilesX * nrTilesY * m_MaxViewCount;
             const int capacityUShortsPerTile = 32;
             const int dwordsPerTile = (capacityUShortsPerTile + 1) >> 1;        // room for 31 lights and a nrLights value.
 
@@ -855,7 +849,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 var nrClustersX = (width + LightDefinitions.s_TileSizeClustered - 1) / LightDefinitions.s_TileSizeClustered;
                 var nrClustersY = (height + LightDefinitions.s_TileSizeClustered - 1) / LightDefinitions.s_TileSizeClustered;
-                var nrClusterTiles = nrClustersX * nrClustersY * nrViews;
+                var nrClusterTiles = nrClustersX * nrClustersY * m_MaxViewCount;
 
                 s_PerVoxelOffset = new ComputeBuffer((int)LightCategory.Count * (1 << k_Log2NumClusters) * nrClusterTiles, sizeof(uint));
                 s_PerVoxelLightLists = new ComputeBuffer(NumLightIndicesPerClusteredTile() * nrClusterTiles, sizeof(uint));
@@ -870,9 +864,29 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 var nrBigTilesX = (width + 63) / 64;
                 var nrBigTilesY = (height + 63) / 64;
-                var nrBigTiles = nrBigTilesX * nrBigTilesY * nrViews;
+                var nrBigTiles = nrBigTilesX * nrBigTilesY * m_MaxViewCount;
                 s_BigTileLightList = new ComputeBuffer(LightDefinitions.s_MaxNrBigTileLightsPlusOne * nrBigTiles, sizeof(uint));
             }
+
+            // Allocate matrix arrays used for LightList building
+            {
+                m_LightListProjMatrices = new Matrix4x4[m_MaxViewCount];
+                m_LightListProjscrMatrices = new Matrix4x4[m_MaxViewCount];
+                m_LightListInvProjscrMatrices = new Matrix4x4[m_MaxViewCount];
+                m_LightListProjHMatrices = new Matrix4x4[m_MaxViewCount];
+                m_LightListInvProjHMatrices = new Matrix4x4[m_MaxViewCount];
+            }
+
+            // The bounds and light volumes are view-dependent, and AABB is additionally projection dependent.
+            // The view and proj matrices are per eye in stereo. This means we have to double the size of these buffers.
+            // XRTODO: Maybe in stereo, we will only support half as many lights total, in order to minimize buffer size waste.
+            // Alternatively, we could re-size these buffers if any stereo camera is active, instead of unilaterally increasing buffer size.
+            // TODO: I don't think k_MaxLightsOnScreen corresponds to the actual correct light count for cullable light types (punctual, area, env, decal)
+            s_AABBBoundsBuffer = new ComputeBuffer(m_MaxViewCount * 2 * m_MaxLightsOnScreen, 4 * sizeof(float));
+            s_ConvexBoundsBuffer = new ComputeBuffer(m_MaxViewCount * m_MaxLightsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(SFiniteLightBound)));
+            s_LightVolumeDataBuffer = new ComputeBuffer(m_MaxViewCount * m_MaxLightsOnScreen, System.Runtime.InteropServices.Marshal.SizeOf(typeof(LightVolumeData)));
+            // Need 3 ints for DispatchIndirect, but need 4 ints for DrawInstancedIndirect.
+            s_DispatchIndirectBuffer = new ComputeBuffer(m_MaxViewCount * LightDefinitions.s_NumFeatureVariants * 4, sizeof(uint), ComputeBufferType.IndirectArguments);
         }
 
         public static Matrix4x4 WorldToCamera(Camera camera)
@@ -893,11 +907,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // camera.projectionMatrix expect RHS data and Unity's transforms are LHS
             // We need to flip it to work with transforms
             return camera.nonObliqueProjMatrix * Matrix4x4.Scale(new Vector3(1, 1, -1));
-        }
-
-        static Matrix4x4 CameraProjectionStereoLHS(Camera camera, Camera.StereoscopicEye eyeIndex)
-        {
-            return camera.GetStereoProjectionMatrix(eyeIndex) * Matrix4x4.Scale(new Vector3(1, 1, -1));
         }
 
         public Vector3 GetLightColor(VisibleLight light)
@@ -1782,23 +1791,20 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                 Vector3 camPosWS = camera.transform.position;
 
-                var worldToView = WorldToCamera(camera);
+                // camera.worldToCameraMatrix is RHS and Unity's transforms are LHS, we need to flip it to work with transforms
+                Matrix4x4 WorldToCamera(Matrix4x4 viewMatrix) { return Matrix4x4.Scale(new Vector3(1, 1, -1)) * viewMatrix; }
+
+                var worldToView = WorldToCamera(camera.worldToCameraMatrix);
                 var rightEyeWorldToView = Matrix4x4.identity;
 
-                if (hdCamera.xrPassInfo.xrDisplay != null)
+                if (hdCamera.xr.enabled)
                 {
-                    hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
-                    renderPass.GetRenderParameter(camera, hdCamera.xrPassInfo.renderParamIndex, out var renderParam);
-                    worldToView = Matrix4x4.Scale(new Vector3(1, 1, -1)) * renderParam.view;
-                }
-                else if (hdCamera.xrlegacyMultipassEnabled)
-                {
-                    worldToView = WorldToViewStereo(camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
-                }
-                else if (hdCamera.xrInstancingEnabled)
-                {
-                    worldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Left);
-                    rightEyeWorldToView = WorldToViewStereo(camera, Camera.StereoscopicEye.Right);
+                    worldToView = WorldToCamera(hdCamera.xr.GetViewMatrix(0));
+                    if (hdCamera.xr.viewCount > 1)
+                    {
+                        Debug.Assert(hdCamera.xr.viewCount == 2);
+                        rightEyeWorldToView = WorldToCamera(hdCamera.xr.GetViewMatrix(1));
+                    }
                 }
 
                 // We must clear the shadow requests before checking if they are any visible light because we would have requests from the last frame executed in the case where we don't see any lights
@@ -2020,7 +2026,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
                             // Then culling side. Must be call in this order as we pass the created Light data to the function
                             GetLightVolumeDataAndBound(lightCategory, gpuLightType, lightVolumeType, light, m_lightList.lights[m_lightList.lights.Count - 1], lightDimensions, worldToView);
-                            if (hdCamera.xrInstancingEnabled)
+                            if (hdCamera.xr.instancingEnabled)
                                 GetLightVolumeDataAndBound(lightCategory, gpuLightType, lightVolumeType, light, m_lightList.lights[m_lightList.lights.Count - 1], lightDimensions, rightEyeWorldToView, Camera.StereoscopicEye.Right);
 
                             // We make the light position camera-relative as late as possible in order
@@ -2145,7 +2151,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         if (GetEnvLightData(cmd, hdCamera, probeWrapper, debugDisplaySettings))
                         {
                             GetEnvLightVolumeDataAndBound(probeWrapper, lightVolumeType, worldToView);
-                            if (hdCamera.xrInstancingEnabled)
+                            if (hdCamera.xr.instancingEnabled)
                                 GetEnvLightVolumeDataAndBound(probeWrapper, lightVolumeType, rightEyeWorldToView, Camera.StereoscopicEye.Right);
 
                             // We make the light position camera-relative as late as possible in order
@@ -2171,7 +2177,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                         m_lightList.bounds.Add(DecalSystem.m_Bounds[i]);
                         m_lightList.lightVolumes.Add(DecalSystem.m_LightVolumes[i]);
 
-                        if (hdCamera.xrInstancingEnabled)
+                        if (hdCamera.xr.instancingEnabled)
                         {
                             m_lightList.rightEyeBounds.Add(DecalSystem.m_Bounds[i]);
                             m_lightList.rightEyeLightVolumes.Add(DecalSystem.m_LightVolumes[i]);
@@ -2194,14 +2200,14 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 {
                     // Density volumes are not lights and therefore should not affect light classification.
                     LightFeatureFlags featureFlags = 0;
-                    AddBoxVolumeDataAndBound(densityVolumes.bounds[i], LightCategory.DensityVolume, featureFlags, worldToViewCR, hdCamera.xrInstancingEnabled);
+                    AddBoxVolumeDataAndBound(densityVolumes.bounds[i], LightCategory.DensityVolume, featureFlags, worldToViewCR, hdCamera.xr.instancingEnabled);
                 }
 
                 m_lightCount = m_lightList.lights.Count + m_lightList.envLights.Count + decalDatasCount + m_densityVolumeCount;
                 Debug.Assert(m_lightCount == m_lightList.bounds.Count);
                 Debug.Assert(m_lightCount == m_lightList.lightVolumes.Count);
 
-                if (hdCamera.xrInstancingEnabled)
+                if (hdCamera.xr.instancingEnabled)
                 {
                     // TODO: Proper decal + stereo cull management
 
@@ -2339,11 +2345,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             temp.SetRow(1, new Vector4(0.0f, 0.5f * h, 0.0f, 0.5f * h));
             temp.SetRow(2, new Vector4(0.0f, 0.0f, 0.5f, 0.5f));
             temp.SetRow(3, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
-            bool isOrthographic = camera.orthographic;
 
             // camera to screen matrix (and it's inverse)
-            if (hdCamera.xrInstancingEnabled)
+            for (int viewIndex = 0; viewIndex < hdCamera.viewCount; ++viewIndex)
             {
+                var proj = hdCamera.camera.projectionMatrix;
+
                 // XRTODO: If possible, we could generate a non-oblique stereo projection
                 // matrix.  It's ok if it's not the exact same matrix, as long as it encompasses
                 // the same FOV as the original projection matrix (which would mean padding each half
@@ -2351,33 +2358,15 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // real projection space.  We just use screen space to figure out what is proximal
                 // to a cluster or tile.
                 // Once we generate this non-oblique projection matrix, it can be shared across both eyes (un-array)
-                for (int xrViewIndex = 0; xrViewIndex < hdCamera.xrViewCount; xrViewIndex++)
-                {
-                    m_LightListProjMatrices[xrViewIndex] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)xrViewIndex);
-                    m_LightListProjscrMatrices[xrViewIndex] = temp * m_LightListProjMatrices[xrViewIndex];
-                    m_LightListInvProjscrMatrices[xrViewIndex] = m_LightListProjscrMatrices[xrViewIndex].inverse;
-                }
-            }
-            else
-            {
-                if (hdCamera.xrPassInfo.xrDisplay != null)
-                {
-                    hdCamera.xrPassInfo.xrDisplay.GetRenderPass(hdCamera.xrPassInfo.renderPassIndex, out var renderPass);
-                    renderPass.GetRenderParameter(camera, hdCamera.xrPassInfo.renderParamIndex, out var renderParam);
-                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(renderParam.projection);
-                }
-                else if (hdCamera.xrlegacyMultipassEnabled)
-                {
-                    m_LightListProjMatrices[0] = CameraProjectionStereoLHS(hdCamera.camera, (Camera.StereoscopicEye)hdCamera.xrLegacyMultipassEye);
-                }
-                else
-                {
-                    m_LightListProjMatrices[0] = GeometryUtils.GetProjectionMatrixLHS(hdCamera.camera.projectionMatrix);
-                }
+                if (hdCamera.xr.enabled)
+                    proj = hdCamera.xr.GetProjMatrix(viewIndex);
 
-                m_LightListProjscrMatrices[0] = temp * m_LightListProjMatrices[0];
-                m_LightListInvProjscrMatrices[0] = m_LightListProjscrMatrices[0].inverse;
+                m_LightListProjMatrices[viewIndex] = proj * Matrix4x4.Scale(new Vector3(1, 1, -1));
+                m_LightListProjscrMatrices[viewIndex] = temp * m_LightListProjMatrices[viewIndex];
+                m_LightListInvProjscrMatrices[viewIndex] = m_LightListProjscrMatrices[viewIndex].inverse;
             }
+
+            bool isOrthographic = camera.orthographic;
             var isProjectionOblique = GeometryUtils.IsProjectionMatrixOblique(m_LightListProjMatrices[0]);
 
             // generate screen-space AABBs (used for both fptl and clustered).
@@ -2388,10 +2377,10 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 temp.SetRow(2, new Vector4(0.0f, 0.0f, 0.5f, 0.5f));
                 temp.SetRow(3, new Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                for (int xrViewIndex = 0; xrViewIndex < hdCamera.xrViewCount; xrViewIndex++)
+                for (int viewIndex = 0; viewIndex < hdCamera.viewCount; viewIndex++)
                 {
-                    m_LightListProjHMatrices[xrViewIndex] = temp * m_LightListProjMatrices[xrViewIndex];
-                    m_LightListInvProjHMatrices[xrViewIndex] = m_LightListProjHMatrices[xrViewIndex].inverse;
+                    m_LightListProjHMatrices[viewIndex] = temp * m_LightListProjMatrices[viewIndex];
+                    m_LightListInvProjHMatrices[viewIndex] = m_LightListProjHMatrices[viewIndex].inverse;
                 }
 
                 var genAABBKernel = isProjectionOblique ? s_GenAABBKernel_Oblique : s_GenAABBKernel;

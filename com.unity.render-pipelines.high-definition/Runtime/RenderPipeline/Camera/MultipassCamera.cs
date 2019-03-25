@@ -1,75 +1,65 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine.Rendering;
-using UnityEngine.Experimental.XR;
 
 namespace UnityEngine.Experimental.Rendering.HDPipeline
 {
-    public struct PassInfo
+    // Used as key in Dictionary
+    public struct MultipassCamera : IEquatable<MultipassCamera>
     {
-        public XRDisplaySubsystem xrDisplay;
-        public int renderPassIndex;
-        public int renderParamIndex;
+        private Camera m_Camera;
+        private int    m_PassId;
 
-        public PassInfo(XRDisplaySubsystem xrDisplay, int renderPassIndex, int renderParamIndex)
-        {
-            this.xrDisplay = xrDisplay;
-            this.renderPassIndex = renderPassIndex;
-            this.renderParamIndex = renderParamIndex;
-        }
-    }
-
-    public struct MultipassCamera
-    {
-        public Camera m_Camera;
-        public PassInfo m_PassInfo;
-
-        public MultipassCamera(Camera camera = null, PassInfo passInfo = default)
+        public MultipassCamera(Camera camera)
         {
             m_Camera = camera;
-            m_PassInfo = passInfo;
+            m_PassId = -1;
+        }
+
+        public MultipassCamera(Camera camera, int passId)
+        {
+            m_Camera = camera;
+            m_PassId = passId;
         }
 
         public Camera camera { get { return m_Camera; } }
-        public PassInfo passInfo { get { return m_PassInfo; } }
+        public int    passId { get { return m_PassId; } }
 
-        static public List<MultipassCamera> SetupFrame(Camera[] cameras, XRDisplaySubsystem xrDisplay)
+        public bool Equals(MultipassCamera other)
         {
-            // TODO: use pool
-            List<MultipassCamera> multipassCameras = new List<MultipassCamera>();
-            foreach (var camera in cameras)
+            return passId == other.passId && camera == other.camera;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is MultipassCamera)
+                return Equals((MultipassCamera)obj);
+
+            return false;
+        }
+
+        public static bool operator == (MultipassCamera x, MultipassCamera y)
+        {
+            return x.Equals(y);
+        }
+
+        public static bool operator != (MultipassCamera x, MultipassCamera y)
+        {
+            return !(x == y);
+        }
+
+        public override int GetHashCode()
+        {
+            int hash = 13;
+
+            unchecked
             {
-                if (xrDisplay != null)
-                {
-                    for (int renderPassIndex = 0; renderPassIndex < xrDisplay.GetRenderPassCount(); ++renderPassIndex)
-                    {
-                        xrDisplay.GetRenderPass(renderPassIndex, out var renderPass);
-                        for (int renderParamIndex = 0; renderParamIndex < renderPass.GetRenderParameterCount(); ++renderParamIndex)
-                        {
-                            //renderPass.GetRenderParameter(camera, renderParamIndex, out var renderParam);
-                            PassInfo passInfo = new PassInfo(xrDisplay, renderPassIndex, renderParamIndex);
-                            multipassCameras.Add(new MultipassCamera(camera, passInfo));
-                        }
-                    }
-                }
-                else
-                {
-                    if (camera.stereoEnabled && XRGraphics.enabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.MultiPass)
-                    {
-                        for (int passIndex = 0; passIndex < 2; ++passIndex)
-                        {
-                            PassInfo passInfo = new PassInfo(xrDisplay, passIndex, -1);
-                            multipassCameras.Add(new MultipassCamera(camera, passInfo));
-                        }
-                    }
-                    else
-                    {
-                        multipassCameras.Add(new MultipassCamera(camera));
-                    }
-                }
+                hash = hash * 23 + passId;
+                if (camera != null)
+                    hash = hash * 23 + camera.GetHashCode();
             }
 
-            return multipassCameras;
+            return hash;
         }
     }
 }

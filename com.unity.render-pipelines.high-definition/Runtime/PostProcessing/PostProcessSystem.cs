@@ -465,7 +465,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 // Final pass
                 using (new ProfilingSample(cmd, "Final Pass", CustomSamplerId.FinalPost.GetSampler()))
                 {
-                    // XRTODO: remove once SPI is working
+                    // XRTODO: double-wide cleanup
                     bool restoreSinglePass = false;
                     if (camera.camera.stereoEnabled && XRGraphics.stereoRenderingMode == XRGraphics.StereoRenderingMode.SinglePass)
                     {
@@ -476,7 +476,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     DoFinalPass(cmd, camera, blueNoise, source, afterPostProcessTexture, finalRT, flipY);
                     PoolSource(ref source, null);
 
-                    // XRTODO: remove once SPI is working
+                    // XRTODO: double-wide cleanup
                     if (restoreSinglePass)
                         cmd.SetSinglePassStereo(SinglePassStereoMode.SideBySide);
                 }
@@ -790,7 +790,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             Assert.IsTrue(nearLayerActive || farLayerActive);
 
             bool bothLayersActive = nearLayerActive && farLayerActive;
-            bool useTiles = !camera.xrInstancingEnabled;
+            bool useTiles = !camera.xr.instancingEnabled;
             bool hqFiltering = m_DepthOfField.highQualityFiltering.value;
 
             const uint kIndirectNearOffset = 0u * sizeof(uint);
