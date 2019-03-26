@@ -2926,7 +2926,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (!m_Asset.currentPlatformRenderPipelineSettings.lowresTransparentSettings.enabled)
                 return;
 
-            using (new ProfilingSample(cmd, "Low Res Transparent", CustomSamplerId.ForwardPassName.GetSampler()))
+            using (new ProfilingSample(cmd, "Low Res Transparent", CustomSamplerId.LowResTransparent.GetSampler()))
             {
                 cmd.SetGlobalInt(HDShaderIDs._OffScreenRendering, 1);
                 cmd.SetGlobalInt(HDShaderIDs._LowResTransparentFactor, 2);
@@ -3146,8 +3146,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (!settings.enabled)
                 return;
 
-            // TODO_FCC: Add sampler id 
-            using (new ProfilingSample(cmd, "Downsample Depth Buffer for Low Res Transparency", CustomSamplerId.CopyDepthBuffer.GetSampler()))
+            using (new ProfilingSample(cmd, "Downsample Depth Buffer for Low Res Transparency", CustomSamplerId.DownsampleDepth.GetSampler()))
             {
                 HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetLowResDepthBuffer());
                 cmd.SetViewport(new Rect(0, 0, hdCamera.actualWidth * 0.5f, hdCamera.actualHeight * 0.5f));
@@ -3166,8 +3165,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (!settings.enabled)
                 return;
 
-            // TODO_FCC: Add sampler id 
-            using (new ProfilingSample(cmd, "Upsample Low Res Transparency", CustomSamplerId.CopyDepthBuffer.GetSampler()))
+            using (new ProfilingSample(cmd, "Upsample Low Res Transparency", CustomSamplerId.UpsampleLowResTransparent.GetSampler()))
             {
                 HDUtils.SetRenderTarget(cmd, hdCamera, m_CameraColorBuffer);
                 if(settings.upsampleType == LowResTransparentUpsample.Bilinear)
