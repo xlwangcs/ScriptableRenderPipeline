@@ -70,6 +70,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         MaterialPropertyBlock m_CopyDepthPropertyBlock = new MaterialPropertyBlock();
         Material m_CopyDepth;
         Material m_DownsampleDepthMaterial;
+        Material m_UpsampleTransparency;
         GPUCopy m_GPUCopy;
         MipGenerator m_MipGenerator;
         BlueNoise m_BlueNoise;
@@ -324,6 +325,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             m_CopyDepth = CoreUtils.CreateEngineMaterial(asset.renderPipelineResources.shaders.copyDepthBufferPS);
             m_DownsampleDepthMaterial = CoreUtils.CreateEngineMaterial(asset.renderPipelineResources.shaders.downsampleDepthPS);
+            m_UpsampleTransparency = CoreUtils.CreateEngineMaterial(asset.renderPipelineResources.shaders.upsampleTransparentPS);
 
             m_ApplyDistortionMaterial = CoreUtils.CreateEngineMaterial(asset.renderPipelineResources.shaders.applyDistortionPS);
 
@@ -706,6 +708,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             CoreUtils.Destroy(m_CopyDepth);
             CoreUtils.Destroy(m_ErrorMaterial);
             CoreUtils.Destroy(m_DownsampleDepthMaterial);
+            CoreUtils.Destroy(m_UpsampleTransparency);
 
             m_SSSBufferManager.Cleanup();
             m_SharedRTManager.Cleanup();
@@ -1912,7 +1915,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             UpsampleTransparent(hdCamera, cmd);
 
             // At this point, m_CameraColorBuffer has been filled by either debug views are regular rendering so we can push it here.
-            PushColorPickerDebugTexture(cmd, hdCamera, m_CameraColorAndLowResTransparent);
+            PushColorPickerDebugTexture(cmd, hdCamera, m_CameraColorBuffer);
 
             RenderPostProcess(cullingResults, hdCamera, target.id, renderContext, cmd);
 
@@ -3128,7 +3131,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 HDUtils.SetRenderTarget(cmd, hdCamera, m_SharedRTManager.GetLowResDepthBuffer());
                 cmd.SetViewport(new Rect(0, 0, hdCamera.actualWidth * 0.5f, hdCamera.actualHeight * 0.5f));
                 // TODO: Add option to switch modes at runtime
-                m_DownsampleDepthMaterial.EnableKeyword("CHECKERBOARD_DOWNSAMPLE");
+                //m_DownsampleDepthMaterial.EnableKeyword("CHECKERBOARD_DOWNSAMPLE");
                 cmd.DrawProcedural(Matrix4x4.identity, m_DownsampleDepthMaterial, 0, MeshTopology.Triangles, 3, 1, null);
             }
         }
@@ -3138,15 +3141,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // TODO_FCC: Add sampler id 
             using (new ProfilingSample(cmd, "Upsample Low Res Transparency", CustomSamplerId.CopyDepthBuffer.GetSampler()))
             {
-                ComputeShader cs = m_Asset.renderPipelineResources.shaders.upsampleTransparentCS;
-
-                // TODO_FCC: Add switch at runtime
-                int kernel = cs.FindKernel("UpsampleTransparent_Bilinear");
-
-                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._LowResTransparent, m_LowResTransparentBuffer);
-                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._InputTexture, m_CameraColorBuffer);
-                cmd.SetComputeTextureParam(cs, kernel, HDShaderIDs._OutputTexture, m_CameraColorAndLowResTransparent);
-                cmd.DispatchCompute(cs, kernel, (hdCamera.actualWidth + 7) / 8, (hdCamera.actualHeight + 7) / 8, XRGraphics.computePassCount);
+                HDUtils.SetRenderTarget(cmd, hdCamera, m_CameraColorBuffer);
+                m_UpsampleTransparency.EnableKeyword("NEAREST_DEPTH");
+                m_UpsampleTransparency.SetTexture(HDShaderIDs._LowResTransparent, m_LowResTransparentBuffer);
+                m_UpsampleTransparency.SetTexture(HDShaderIDs._LowResDepthTexture, m_SharedRTManager.GetLowResDepthBuffer());               
+                cmd.DrawProcedural(Matrix4x4.identity, m_UpsampleTransparency, 0, MeshTopology.Triangles, 3, 1, null);
             }
         }
 
@@ -3439,7 +3438,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 cmd: cmd,
                 camera: hdCamera,
                 blueNoise: m_BlueNoise,
-                colorBuffer: m_CameraColorAndLowResTransparent,
+                colorBuffer: m_CameraColorBuffer,
                 afterPostProcessTexture: GetAfterPostProcessOffScreenBuffer(),
                 lightingBuffer: null,
                 finalRT: destination,

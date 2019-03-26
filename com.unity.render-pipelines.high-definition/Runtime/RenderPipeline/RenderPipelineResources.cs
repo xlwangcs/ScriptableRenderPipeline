@@ -87,8 +87,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // TODO_FCC: Move to its own folder
             [Reload("ShaderLibrary/DownsampleDepth.shader")]
             public Shader downsampleDepthPS;
-            [Reload("ShaderLibrary/UpsampleTransparent.compute")]
-            public ComputeShader upsampleTransparentCS;
+            [Reload("ShaderLibrary/UpsampleTransparent.shader")]
+            public Shader upsampleTransparentPS;
 
             // Sky
             [Reload("Sky/BlitCubemap.shader")]
