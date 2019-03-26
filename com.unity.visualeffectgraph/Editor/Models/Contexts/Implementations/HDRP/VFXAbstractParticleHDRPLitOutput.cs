@@ -382,7 +382,17 @@ namespace UnityEditor.VFX
             if (blendMode == BlendMode.Additive)
                 writer.WriteLine("Blend One One");
             else if (blendMode == BlendMode.Alpha)
-                writer.WriteLine("Blend One OneMinusSrcAlpha");
+            {
+                if(preRefraction)
+                {
+                    writer.WriteLine("Blend One OneMinusSrcAlpha, Zero OneMinusSrcAlpha");
+                }
+                else
+                {
+                    writer.WriteLine("Blend One OneMinusSrcAlpha");
+                }
+
+            }
             else if (blendMode == BlendMode.AlphaPremultiplied)
                 writer.WriteLine("Blend One OneMinusSrcAlpha");
         }
