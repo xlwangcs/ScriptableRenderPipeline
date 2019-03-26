@@ -62,7 +62,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             m_CameraDepthBufferMipChain = RTHandles.Alloc(ComputeDepthBufferMipChainSize, colorFormat: GraphicsFormat.R32_SFloat, filterMode: FilterMode.Point, enableRandomWrite: true, xrInstancing: true, useDynamicScale: true, name: "CameraDepthBufferMipChain");
 
             // Create the half res depth buffer used for low resolution transparency
-            // TODO: Support MSAA.
             m_CameraHalfResDepthBuffer = RTHandles.Alloc(Vector2.one * 0.5f, depthBufferBits: DepthBits.Depth32, filterMode: FilterMode.Point, xrInstancing: true, useDynamicScale: true, name: "LowResDepthBuffer");
 
             // Technically we won't need this buffer in some cases, but nothing that we can determine at init time.

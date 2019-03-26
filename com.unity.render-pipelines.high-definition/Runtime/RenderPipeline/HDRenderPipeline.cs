@@ -112,8 +112,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         RTHandleSystem.RTHandle m_DistortionBuffer;
 
         RTHandleSystem.RTHandle m_LowResTransparentBuffer;
-        // TODO_FCC: Can we avoid an extra copy? Can we move to the pp pipe? 
-        RTHandleSystem.RTHandle m_CameraColorAndLowResTransparent;
 
         // TODO: remove me, I am just a temporary debug texture. :-)
         // RTHandleSystem.RTHandle m_SsrDebugTexture;
