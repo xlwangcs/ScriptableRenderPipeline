@@ -1,4 +1,4 @@
-﻿Shader "Hidden/HDRP/DownsampleDepth"
+﻿Shader "Hidden/HDRP/UpsampleTransparent"
 {
     HLSLINCLUDE
 
