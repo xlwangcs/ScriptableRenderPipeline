@@ -34,9 +34,11 @@
         TEXTURE2D_X(_LowResTransparent);
 #ifdef NEAREST_DEPTH
         TEXTURE2D_X_FLOAT(_LowResDepthTexture);
-#endif
 
 #define NEIGHBOUR_SEARCH 4
+#define DEBUG_EDGE 0
+#endif
+
 
         float4 Frag(Varyings input) : SV_Target
         {
@@ -50,8 +52,8 @@
         #elif NEAREST_DEPTH
             float4 lowResDepths = GATHER_RED_TEXTURE2D_X(_LowResDepthTexture, s_linear_clamp_sampler, ClampAndScaleUVForBilinear(uv, halfResTexelSize));
             
+            // Gather UVs
             float2 topLeftUV = uv - 0.5f * halfResTexelSize; 
-
             float2 UVs[NEIGHBOUR_SEARCH] = {
               topLeftUV + float2(0.0f,             halfResTexelSize.y),
               topLeftUV + float2(halfResTexelSize.x, halfResTexelSize.y),
@@ -60,11 +62,11 @@
             };
 
             float linearFullResDepth = LinearEyeDepth(LoadCameraDepth(input.positionCS.xy), _ZBufferParams);
-            float depthDiffThresh = 0.1f; // make this a param?
 
             float minDiff = 1e12f;
-            float2 nearestUV = uv;
+            float2 nearestUV;
             int countBelowThresh = 0;
+            float relativeDepthThresh = 0.1f * linearFullResDepth;
 
             [unroll]
             for (int i = 0; i < NEIGHBOUR_SEARCH; ++i)
@@ -75,23 +77,23 @@
                     minDiff = depthDiff;
                     nearestUV = UVs[i];
                 }
-                countBelowThresh += (depthDiff < depthDiffThresh);
+                countBelowThresh += (depthDiff < relativeDepthThresh);
             }
 
             if (countBelowThresh == NEIGHBOUR_SEARCH)
             {
                 // Bilinear.
-                return SAMPLE_TEXTURE2D_X_LOD(_LowResTransparent, s_linear_clamp_sampler, ClampAndScaleUVForBilinear(uv, halfResTexelSize), 0.0);
+                return SAMPLE_TEXTURE2D_X_LOD(_LowResTransparent, s_linear_clamp_sampler, ClampAndScaleUVForBilinear(uv, halfResTexelSize), 0);
             }
             else
             {
-                // Edge
-                return SAMPLE_TEXTURE2D_X_LOD(_LowResTransparent, s_point_clamp_sampler, ClampAndScaleUVForPoint(nearestUV), 0.0);
+                // Edge with nearest UV
+#if DEBUG_EDGE
+                return float4(0.0, 10.0, 0.0, 1.0);
+#else
+                return SAMPLE_TEXTURE2D_X_LOD(_LowResTransparent, s_point_clamp_sampler, ClampAndScaleUVForPoint(nearestUV), 0);
+#endif
             }
-
-        #else
-            // Nothing to see here yet.
-            return 0.0f;
         #endif
 
         }
