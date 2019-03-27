@@ -334,7 +334,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
         {
             if (mode == GenerationMode.ForReals || pass.UseInPreview)
             {
-                SurfaceMaterialOptions materialOptions = HDSubShaderUtilities.BuildMaterialOptions(masterNode.surfaceType, masterNode.alphaMode, masterNode.doubleSided.isOn, false, false);
+                SurfaceMaterialOptions materialOptions = HDSubShaderUtilities.BuildMaterialOptions(masterNode.surfaceType, masterNode.alphaMode, masterNode.doubleSided.isOn, false, (masterNode.renderingPass == HDRenderQueue.RenderQueueType.LowTransparent || masterNode.renderingPass == HDRenderQueue.RenderQueueType.AfterPostprocessTransparent));
 
                 pass.OnGeneratePass(masterNode);
 
