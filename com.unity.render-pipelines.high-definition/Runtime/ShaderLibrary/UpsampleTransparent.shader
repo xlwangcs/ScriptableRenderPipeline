@@ -50,10 +50,13 @@
         #ifdef BILINEAR
             return SAMPLE_TEXTURE2D_X_LOD(_LowResTransparent, s_linear_clamp_sampler, ClampAndScaleUVForBilinear(uv, halfResTexelSize), 0.0);
         #elif NEAREST_DEPTH
+
+            // The following is an implementation of NVIDIA's http://developer.download.nvidia.com/assets/gamedev/files/sdk/11/OpacityMappingSDKWhitePaper.pdf
+
             float4 lowResDepths = GATHER_RED_TEXTURE2D_X(_LowResDepthTexture, s_linear_clamp_sampler, ClampAndScaleUVForBilinear(uv, halfResTexelSize));
-            
+
             // Gather UVs
-            float2 topLeftUV = uv - 0.5f * halfResTexelSize; 
+            float2 topLeftUV = uv - 0.5f * halfResTexelSize;
             float2 UVs[NEIGHBOUR_SEARCH] = {
               topLeftUV + float2(0.0f,             halfResTexelSize.y),
               topLeftUV + float2(halfResTexelSize.x, halfResTexelSize.y),
@@ -61,12 +64,14 @@
               topLeftUV,
             };
 
-            float linearFullResDepth = LinearEyeDepth(LoadCameraDepth(input.positionCS.xy), _ZBufferParams);
+            float fullResDepth = LoadCameraDepth(input.positionCS.xy);
+            float linearFullResDepth = LinearEyeDepth(fullResDepth, _ZBufferParams);
 
             float minDiff = 1e12f;
+            float relativeDepthThresh = 0.1f * linearFullResDepth;
+
             float2 nearestUV;
             int countBelowThresh = 0;
-            float relativeDepthThresh = 0.1f * linearFullResDepth;
 
             [unroll]
             for (int i = 0; i < NEIGHBOUR_SEARCH; ++i)
