@@ -873,7 +873,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                                                                   AlphaMode alphaMode,
                                                                   bool twoSided,
                                                                   bool refraction,
-                                                                  bool lowResTransparent)
+                                                                  bool offscreenTranslucent)
         {
             SurfaceMaterialOptions materialOptions = new SurfaceMaterialOptions();
             if (surfaceType == SurfaceType.Opaque)
@@ -924,7 +924,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     }
                 }
 
-                if(lowResTransparent)
+                if(offscreenTranslucent)
                 {
                     materialOptions.alphaSrcBlend = SurfaceMaterialOptions.BlendMode.Zero;
                 }
