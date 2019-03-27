@@ -98,7 +98,7 @@ float3 TransformObjectToWorldNormal(float3 normalOS)
     return TransformObjectToWorldDir(normalOS);
 #else
     // Normal need to be multiply by inverse transpose
-    return normalize(mul(normalOS, GetWorldToObjectMatrix()));
+    return normalize(mul(normalOS, (float3x3)GetWorldToObjectMatrix()));
 #endif
 }
 
