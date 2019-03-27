@@ -34,25 +34,25 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             public uint materialFeatures;
 
             // Standard
-            [FramePassMaterialMapping(MaterialSharedProperty.Albedo)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.Albedo)]
             [SurfaceDataAttributes("Base Color", false, true)]
             public Vector3 baseColor;
             [SurfaceDataAttributes("Specular Occlusion")]
             public float specularOcclusion;
 
-            [FramePassMaterialMapping(MaterialSharedProperty.Normal)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.Normal)]
             [SurfaceDataAttributes(new string[] {"Normal", "Normal View Space"}, true)]
             public Vector3 normalWS;
 
-            [FramePassMaterialMapping(MaterialSharedProperty.Smoothness)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.Smoothness)]
             [SurfaceDataAttributes("Smoothness")]
             public float perceptualSmoothness;
 
-            [FramePassMaterialMapping(MaterialSharedProperty.AmbientOcclusion)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.AmbientOcclusion)]
             [SurfaceDataAttributes("Ambient Occlusion")]
             public float ambientOcclusion;
 
-            [FramePassMaterialMapping(MaterialSharedProperty.Metal)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.Metal)]
             [SurfaceDataAttributes("Metallic")]
             public float metallic;
 
@@ -62,7 +62,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             // MaterialFeature dependent attribute
 
             // Specular Color
-            [FramePassMaterialMapping(MaterialSharedProperty.Specular)]
+            [MaterialSharedPropertyMapping(MaterialSharedProperty.Specular)]
             [SurfaceDataAttributes("Specular Color", false, true)]
             public Vector3 specularColor;
 

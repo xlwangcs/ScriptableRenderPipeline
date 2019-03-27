@@ -64,15 +64,13 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             Metal,
             Specular,
             Alpha,
-
-            //[Todo: see for particular properties like aniso...]
         }
 
-        public class FramePassMaterialMappingAttribute : Attribute
+        public class MaterialSharedPropertyMappingAttribute : Attribute
         {
             public readonly MaterialSharedProperty property;
 
-            public FramePassMaterialMappingAttribute(MaterialSharedProperty property)
+            public MaterialSharedPropertyMappingAttribute(MaterialSharedProperty property)
                 => this.property = property;
         }
     }
@@ -319,9 +317,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 int localIndex = 0;
                 foreach (var field in typeof(Builtin.BuiltinData).GetFields())
                 {
-                    if (Attribute.IsDefined(field, typeof(FramePassMaterialMappingAttribute)))
+                    if (Attribute.IsDefined(field, typeof(MaterialSharedPropertyMappingAttribute)))
                     {
-                        var propertyAttr = (FramePassMaterialMappingAttribute[])field.GetCustomAttributes(typeof(FramePassMaterialMappingAttribute), false);
+                        var propertyAttr = (MaterialSharedPropertyMappingAttribute[])field.GetCustomAttributes(typeof(MaterialSharedPropertyMappingAttribute), false);
                         materialPropertyMap[propertyAttr[0].property].Add(materialStartIndex + localIndex);
                     }
                     var surfaceAttributes = (SurfaceDataAttributes[])field.GetCustomAttributes(typeof(SurfaceDataAttributes), false);
@@ -344,9 +342,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     localIndex = 0;
                     foreach (var field in fields)
                     {
-                        if (Attribute.IsDefined(field, typeof(FramePassMaterialMappingAttribute)))
+                        if (Attribute.IsDefined(field, typeof(MaterialSharedPropertyMappingAttribute)))
                         {
-                            var propertyAttr = (FramePassMaterialMappingAttribute[])field.GetCustomAttributes(typeof(FramePassMaterialMappingAttribute), false);
+                            var propertyAttr = (MaterialSharedPropertyMappingAttribute[])field.GetCustomAttributes(typeof(MaterialSharedPropertyMappingAttribute), false);
                             materialPropertyMap[propertyAttr[0].property].Add(materialStartIndex + localIndex);
                         }
                         var surfaceAttributes = (SurfaceDataAttributes[])field.GetCustomAttributes(typeof(SurfaceDataAttributes), false);
@@ -369,9 +367,9 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                     localIndex = 0;
                     foreach (var field in fields)
                     {
-                        if (Attribute.IsDefined(field, typeof(FramePassMaterialMappingAttribute)))
+                        if (Attribute.IsDefined(field, typeof(MaterialSharedPropertyMappingAttribute)))
                         {
-                            var propertyAttr = (FramePassMaterialMappingAttribute[])field.GetCustomAttributes(typeof(FramePassMaterialMappingAttribute), false);
+                            var propertyAttr = (MaterialSharedPropertyMappingAttribute[])field.GetCustomAttributes(typeof(MaterialSharedPropertyMappingAttribute), false);
                             materialPropertyMap[propertyAttr[0].property].Add(materialStartIndex + localIndex++);
                         }
                         var surfaceAttributes = (SurfaceDataAttributes[])field.GetCustomAttributes(typeof(SurfaceDataAttributes), false);
