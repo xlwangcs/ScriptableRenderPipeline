@@ -25,7 +25,7 @@ Texture2D<float>			_DepthTexture;
 
 // Buffers for the temporal filtering
 RWTexture2D<float>          _AOHistorybufferRW;
-Texture2D<float4>           _DenoiseInputTexture;
+TEXTURE2D_X(_DenoiseInputTexture);
 RWTexture2D<float4>         _DenoiseOutputTextureRW;
 
 // Filter parameters
@@ -40,7 +40,7 @@ void AOCopyTAAHistory(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId : SV
 
     // Get the previous value and current value
     float historyValue = _AOHistorybufferRW[centerCoord];
-    float currentValue = _DenoiseInputTexture[centerCoord].x;
+    float currentValue = LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).x;
 
     // Merge them into the previous buffer
     _DenoiseOutputTextureRW[centerCoord] = float4(currentValue, historyValue, 0, 0);
@@ -59,7 +59,7 @@ void AOApplyTAA(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId : SV_Group
     float2 closest = GetClosestFragment(posInputs);
 
     float2 velocity;
-    DecodeVelocity(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
+    DecodeMotionVector(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
     float velocityLength = length(velocity);
 
     float2 uv = posInputs.positionNDC;
@@ -225,7 +225,7 @@ void AOBilateralFilter(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId : S
         // Compute the weight (skip computation for the center)
         const float w = r ? gaussian(r, sigma) * ComputeBilateralWeight(center, TapBilateralData(tapCoord)) : 1.0;
 
-        aoSum += _DenoiseInputTexture[tapCoord].x * w;
+        aoSum += LOAD_TEXTURE2D_X(_DenoiseInputTexture, tapCoord).x * w;
         wSum += w;
     }
 

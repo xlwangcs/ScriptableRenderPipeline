@@ -25,8 +25,8 @@
 Texture2D<float>                    _DepthTexture;
 
 // Buffers for the temporal filtering
-Texture2D<float4>           _IndirectDiffuseHistorybufferRW;
-Texture2D<float4>           _DenoiseInputTexture;
+TEXTURE2D_X(_IndirectDiffuseHistorybufferRW);
+TEXTURE2D_X(_DenoiseInputTexture);
 RWTexture2D<float4>         _DenoiseOutputTextureRW;
 int                         _RaytracingDenoiseRadius;
 
@@ -59,7 +59,7 @@ void RaytracingIndirectDiffuseTAA(uint2 groupThreadId : SV_GroupThreadID, uint2 
     float2 closest = GetClosestFragment(posInputs);
 
     float2 velocity;
-    DecodeVelocity(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
+    DecodeMotionVector(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
     float velocityLength = length(velocity);
 
     float2 uv = posInputs.positionNDC;
@@ -101,7 +101,7 @@ void RaytracingIndirectDiffuseTAA(uint2 groupThreadId : SV_GroupThreadID, uint2 
     color = Unmap(lerp(color, history, feedback));
     color = clamp(color, 0.0, CLAMP_MAX);
     
-    _DenoiseOutputTextureRW[centerCoord] = float4(color, _DenoiseInputTexture[centerCoord].w);
+    _DenoiseOutputTextureRW[centerCoord] = float4(color, LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).w);
 }
 
 // ----------------------------------------------------------------------------
@@ -224,7 +224,7 @@ void IndirectDiffuseFilter(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId
         // Compute the weight (skip computation for the center)
         const float w = r ? gaussian(r, sigma) * ComputeBilateralWeight(center, TapBilateralData(tapCoord)) : 1.0;
 
-        reflSum += _DenoiseInputTexture[tapCoord].xyz * w;
+        reflSum += LOAD_TEXTURE2D_X(_DenoiseInputTexture, tapCoord).xyz * w;
         wSum += w;
     }
 

@@ -28,7 +28,7 @@
 #define AREA_BILLATERAL_TILE_SIZE 8
 
 // Input/intermediate integration texture (containing Sn, Un, U, E)
-Texture2D<float4>       _DenoiseInputTexture;
+TEXTURE2D_X(_DenoiseInputTexture);
 RWTexture2D<float4>     _DenoiseOutputTextureRW;
 
 // ScreenSpace buffers
@@ -65,7 +65,7 @@ void AreaShadowCopyTAAHistory(uint2 groupThreadId : SV_GroupThreadID, uint2 grou
 
     // Get the previous value and current value
     float2 historyValue = _AreaShadowHistoryRW[uint3(centerCoord, _RaytracingShadowSlot)].xy;
-    float2 currentValue = _DenoiseInputTexture[centerCoord].xy;
+    float2 currentValue = LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).xy;
 
     // Merge them into the previous buffer
     _DenoiseOutputTextureRW[centerCoord] = float4(currentValue, historyValue);
@@ -98,7 +98,7 @@ void AreaShadowApplyTAA(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId : 
 
     // Read the matching velocity
     float2 velocity;
-    DecodeVelocity(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
+    DecodeMotionVector(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
     float velocityLength = length(velocity);
 
     // UV used to read the pixels to filter
@@ -173,7 +173,7 @@ void AreaShadowApplyTAA2(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId :
     // Fetch velocity information
     float2 velocity = 0.0;
     const float2 closest = GetClosestFragment(posInput);
-    DecodeVelocity(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
+    DecodeMotionVector(LOAD_TEXTURE2D_X(_CameraMotionVectorsTexture, closest), velocity);
     const float velocityLength = length(velocity);
 
     // Get the UV value (in screen space) corresponding to the current pixel,
@@ -232,8 +232,8 @@ float gaussian(float radius, float sigma)
 // Sample the signal used for the noise estimation at coordSS
 float TapRatio(uint2 coordSS)
 {
-    const float Sn = _DenoiseInputTexture[coordSS].x;
-    const float Un = _DenoiseInputTexture[coordSS].y;
+    const float Sn = LOAD_TEXTURE2D_X(_DenoiseInputTexture, coordSS).x;
+    const float Un = LOAD_TEXTURE2D_X(_DenoiseInputTexture, coordSS).y;
 
     return (Un > 0.0) ? (Sn / Un) : 1.0;
 }
@@ -274,7 +274,7 @@ void AreaShadowEstimateNoise(uint2 groupThreadId : SV_GroupThreadID, uint2 group
     uint2 centerCoord = groupId * AREA_BILLATERAL_TILE_SIZE + groupThreadId;
     centerCoord.x = centerCoord.x + (unity_StereoEyeIndex * _ScreenSize.x);
 
-    if(_DenoiseInputTexture[centerCoord].z < 0.0)
+    if(LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).z < 0.0)
     {
         _DenoiseOutputTextureRW[centerCoord] = float4(0.0, 0.0, -1.0, 1.0);
         return;
@@ -293,7 +293,7 @@ void AreaShadowEstimateNoise(uint2 groupThreadId : SV_GroupThreadID, uint2 group
         maxNoise = max(EstimateNoise(centerCoord, axis), maxNoise);
     }
 
-    _DenoiseOutputTextureRW[centerCoord] = float4(_DenoiseInputTexture[centerCoord].xyz, maxNoise);
+    _DenoiseOutputTextureRW[centerCoord] = float4(LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).xyz, maxNoise);
 }
 
 // ----------------------------------------------------------------------------
@@ -336,7 +336,7 @@ BilateralData TapBilateralData(uint2 coordSS)
 
     if (ANALYTIC_WEIGHT > 0.0)
     {
-        key.analytic = _DenoiseInputTexture[coordSS].z;
+        key.analytic = LOAD_TEXTURE2D_X(_DenoiseInputTexture, coordSS).z;
     }
 
     return key;
@@ -396,7 +396,7 @@ float FilterNoiseEstimate(uint2 coordSS)
     {
         for (int i = -R; i <= R; ++i)
         {
-            result += _DenoiseInputTexture[coordSS + int2(i, j)].w;
+            result += LOAD_TEXTURE2D_X(_DenoiseInputTexture, coordSS + int2(i, j)).w;
         }
     }
 
@@ -416,7 +416,7 @@ void AREA_SHADOW_DENOISE(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId :
 
     #if FINAL_PASS
     const uint2 passIncr = uint2(1, 0);
-    const float noiseEstimate = _DenoiseInputTexture[centerCoord].w ;
+    const float noiseEstimate = LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).w ;
     #else
     const uint2 passIncr = uint2(0, 1);
     const float noiseEstimate = FilterNoiseEstimate(centerCoord);
@@ -443,7 +443,7 @@ void AREA_SHADOW_DENOISE(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId :
         // Compute the weight (skip computation for the center)
         const float w = r ? gaussian(r, sigma) * ComputeBilateralWeight(center, TapBilateralData(tapCoord)) : 1.0;
 
-        SU += _DenoiseInputTexture[tapCoord].xy * w;
+        SU += LOAD_TEXTURE2D_X(_DenoiseInputTexture, tapCoord).xy * w;
         wSum += w;
     }
 
@@ -452,7 +452,7 @@ void AREA_SHADOW_DENOISE(uint2 groupThreadId : SV_GroupThreadID, uint2 groupId :
     _AreaShadowTextureRW[uint3(centerCoord, _RaytracingShadowSlot)] = (wSum > 0.0 && SU.y / wSum > 0.0) ? saturate(SU.x / SU.y) : 1.0;
     #else
     // Store the intermediate result
-    _DenoiseOutputTextureRW[centerCoord] = float4(SU / wSum, _DenoiseInputTexture[centerCoord].z, noiseEstimate);
+    _DenoiseOutputTextureRW[centerCoord] = float4(SU / wSum, LOAD_TEXTURE2D_X(_DenoiseInputTexture, centerCoord).z, noiseEstimate);
     #endif
 }
 
