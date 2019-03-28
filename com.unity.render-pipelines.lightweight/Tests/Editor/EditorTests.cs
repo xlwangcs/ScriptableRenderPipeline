@@ -11,7 +11,7 @@ class EditorTests
         LightweightRenderPipelineAsset asset = LightweightRenderPipelineAsset.Create();
         Assert.AreNotEqual(null, asset.defaultMaterial);
         Assert.AreNotEqual(null, asset.defaultParticleMaterial);
-        Assert.AreNotEqual(null, asset.defaultLineMaterial,);
+        Assert.AreNotEqual(null, asset.defaultLineMaterial);
         Assert.AreNotEqual(null, asset.defaultTerrainMaterial);
         Assert.AreNotEqual(null, asset.defaultShader);
 
