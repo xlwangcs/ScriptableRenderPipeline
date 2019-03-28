@@ -9,9 +9,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         [GenerateHLSL(PackingRules.Exact)]
         public enum MaterialFeatureFlags
         {
-            HairKajiyaKay               = 1 << 0,
-            HairSubsurfaceScattering    = 1 << 1,
-            HairTransmission            = 1 << 2
+            HairKajiyaKay = 1 << 0,
         };
 
         //-----------------------------------------------------------------------------
@@ -47,16 +45,11 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             [SurfaceDataAttributes("Smoothness")]
             public float perceptualSmoothness;
 
-            // SSS
-            [SurfaceDataAttributes("Diffusion Profile Hash")]
-            public uint diffusionProfileHash;
-            [SurfaceDataAttributes("Subsurface Mask")]
-            public float subsurfaceMask;
+            [SurfaceDataAttributes("Transmittance")]
+            public Vector3 transmittance;
 
-            // Transmission
-            // + Diffusion Profile
-            [SurfaceDataAttributes("Thickness")]
-            public float thickness;
+            [SurfaceDataAttributes("RimTransmissionIntensity")]
+            public float rimTransmissionIntensity;
 
             // Anisotropic
             [SurfaceDataAttributes("Hair Strand Direction", true)]
@@ -107,15 +100,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 
             public float perceptualRoughness;
 
-            // SSS
-            public uint diffusionProfileIndex;
-            public float subsurfaceMask;
-
-            // Transmission
-            // + Diffusion Profile
-            public float thickness;
-            public bool useThickObjectMode; // Read from the diffusion profile
-            public Vector3 transmittance;   // Precomputation of transmittance
+            public Vector3 transmittance;
+            public float   rimTransmissionIntensity;
 
             // Anisotropic
             [SurfaceDataAttributes("", true)]
