@@ -426,6 +426,12 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         //buffer must be in float as there is no SetGlobalIntArray in API
         static float[] s_DebugViewMaterialOffsetedBuffer = new float[kDebugViewMaterialBufferLength + 1]; //first is used size
 
+        // Reminder: _DebugViewMaterial[i]
+        //   i==0 -> the size used in the buffer
+        //   i>0  -> the index used (0 value means nothing)
+        // The index stored in this buffer could either be
+        //   - a gBufferIndex (always stored in _DebugViewMaterialArray[1] as only one supported)
+        //   - a property index which is different for each kind of material even if reflecting the same thing (see MaterialSharedProperty)
         int[]                m_DebugViewMaterial = new int[kDebugViewMaterialBufferLength + 1]; // No enum there because everything is generated from materials.
         int                  m_DebugViewEngine = 0;  // No enum there because everything is generated from BSDFData
         DebugViewVarying     m_DebugViewVarying = DebugViewVarying.None;
