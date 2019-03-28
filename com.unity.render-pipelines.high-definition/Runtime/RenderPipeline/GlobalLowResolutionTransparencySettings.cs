@@ -15,7 +15,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         /// <summary>Default GlobalLowResolutionTransparencySettings</summary>
         public static readonly GlobalLowResolutionTransparencySettings @default = new GlobalLowResolutionTransparencySettings()
         {
-            enabled = false,
+            enabled = true,
             checkerboardDepthBuffer = true,
             upsampleType = LowResTransparentUpsample.NearestDepth
         };
