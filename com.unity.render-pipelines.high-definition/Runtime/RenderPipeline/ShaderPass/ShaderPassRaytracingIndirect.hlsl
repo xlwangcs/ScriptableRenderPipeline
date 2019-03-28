@@ -29,9 +29,11 @@ void ClosestHitMain(inout RayIntersection rayIntersection : SV_RayPayload, Attri
     BuiltinData builtinData;
     GetSurfaceDataFromIntersection(fragInput, viewWS, posInput, currentvertex, rayIntersection.cone, surfaceData, builtinData);
 
-    // TODO: Handle this in a better way, we should be able to use baked indirect lighting
+    // We do not want to use the diffuse when we compute the indirect diffuse
+    #ifdef DIFFUSE_LIGHTING_ONLY
     builtinData.bakeDiffuseLighting = float3(0.0, 0.0, 0.0);
     builtinData.backBakeDiffuseLighting = float3(0.0, 0.0, 0.0);
+    #endif
 
     // Compute the bsdf data
     BSDFData bsdfData =  ConvertSurfaceDataToBSDFData(posInput.positionSS, surfaceData);
