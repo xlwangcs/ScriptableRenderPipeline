@@ -113,6 +113,12 @@ void Frag(PackedVaryingsToPS packedInput,
     #endif
 
     // Same code in ShaderPassForwardUnlit.shader
+    // Reminder: _DebugViewMaterialArray[i]
+    //   i==0 -> the size used in the buffer
+    //   i>0  -> the index used (0 value means nothing)
+    // The index stored in this buffer could either be
+    //   - a gBufferIndex (always stored in _DebugViewMaterialArray[1] as only one supported)
+    //   - a property index which is different for each kind of material even if reflecting the same thing (see MaterialSharedProperty)
     bool viewMaterial = false;
     int bufferSize = int(_DebugViewMaterialArray[0]);
     if (bufferSize != 0)
@@ -120,9 +126,13 @@ void Frag(PackedVaryingsToPS packedInput,
         bool needLinearToSRGB = false;
         float3 result = float3(1.0, 0.0, 1.0);
 
+        // Loop through the whole buffer
+        // Works because GetSurfaceDataDebug will do nothing if the index is not a known one
         for (int index = 1; index <= bufferSize; index++)
         {
             int indexMaterialProperty = int(_DebugViewMaterialArray[index]);
+
+            // skip if not really in use
             if (indexMaterialProperty != 0)
             {
                 viewMaterial = true;
