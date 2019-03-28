@@ -191,6 +191,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 asset.profile = profile;
                 profile.Validate();
                 asset.UpdateCache();
+                AssetDatabase.MoveAsset(AssetDatabase.GetAssetPath(asset), path);
                 return asset;
             }
 
@@ -211,7 +212,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 UnityEditor.EditorUtility.SetDirty(this);
                 UnityEditor.AssetDatabase.SaveAssets();
-                // Do not refresh the database at it will force the reimport of all new diffusion profile settings
+                // Do not refresh the database now because it will force the reimport of all new diffusion profile settings
+                EditorApplication.delayCall += UnityEditor.AssetDatabase.Refresh;
             }
         }
 #endif
