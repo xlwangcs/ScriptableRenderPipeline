@@ -15,6 +15,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
         {
             Initial,                // 16 profiles per asset
             DiffusionProfileRework, // one profile per asset
+            // This must stay updated to the latest version
+            Last = DiffusionProfileRework,
         }
         
         [Obsolete("Profiles are obsolete, only one diffusion profile per asset is allowed.")]
@@ -187,7 +189,8 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             if (index == 0)
             {
                 asset.profile = profile;
-                AssetDatabase.MoveAsset(AssetDatabase.GetAssetPath(asset), path);
+                profile.Validate();
+                asset.UpdateCache();
                 return asset;
             }
 
@@ -208,7 +211,7 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
             {
                 UnityEditor.EditorUtility.SetDirty(this);
                 UnityEditor.AssetDatabase.SaveAssets();
-                UnityEditor.AssetDatabase.Refresh();
+                // Do not refresh the database at it will force the reimport of all new diffusion profile settings
             }
         }
 #endif
