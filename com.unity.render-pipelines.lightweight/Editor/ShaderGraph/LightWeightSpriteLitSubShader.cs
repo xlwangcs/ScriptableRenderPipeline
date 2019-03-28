@@ -49,6 +49,10 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             }
         };
 
+        public int GetPreviewPassIndex()
+        {
+            return 0;
+        }
 
         public string ReadTemplate(string template, List<string> sourceAssetDependencyPaths)
         {
@@ -251,7 +255,7 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             // -------------------------------------
             // Generate Output structure for Surface Description function
 
-            GraphUtil.GenerateSurfaceDescriptionStruct(surfaceDescriptionStruct, pixelSlots, true);
+            GraphUtil.GenerateSurfaceDescriptionStruct(surfaceDescriptionStruct, pixelSlots);
 
             // -------------------------------------
             // Generate Surface Description function
@@ -306,7 +310,7 @@ namespace UnityEngine.Experimental.Rendering.LightweightPipeline
             // -------------------------------------
             // Combine Graph sections
 
-            graph.AppendLine(shaderProperties.GetPropertiesDeclaration(1));
+            graph.AppendLine(shaderProperties.GetPropertiesDeclaration(1, mode));
 
             graph.AppendLine(vertexDescriptionInputStruct.ToString());
             graph.AppendLine(surfaceDescriptionInputStruct.ToString());
