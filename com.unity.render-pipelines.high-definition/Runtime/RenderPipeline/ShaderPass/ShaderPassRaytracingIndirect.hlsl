@@ -42,7 +42,7 @@ void ClosestHitMain(inout RayIntersection rayIntersection : SV_RayPayload, Attri
     LightLoop(viewWS, posInput, preLightData, bsdfData, builtinData, float3(0.0, 0.0, 0.0),  float3(0.0, 0.0, 0.0), diffuseLighting, specularLighting);
 
     // Color display for the moment
-    #ifdef DIFFUSE_LIGHTNG_ONLY
+    #ifdef DIFFUSE_LIGHTING_ONLY
     rayIntersection.color = diffuseLighting;
     #else
     rayIntersection.color = diffuseLighting + specularLighting;
