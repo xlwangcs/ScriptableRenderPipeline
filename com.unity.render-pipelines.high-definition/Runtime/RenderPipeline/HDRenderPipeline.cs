@@ -1895,12 +1895,15 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
 #endif
                 DownsampleDepthForLowResTransparency(hdCamera, cmd);
 
+                RenderLowResTransparent(cullingResults, hdCamera, renderContext, cmd);
+
+                UpsampleTransparent(hdCamera, cmd);
+
                 RenderColorPyramid(hdCamera, cmd, false);
 
                 AccumulateDistortion(cullingResults, hdCamera, renderContext, cmd);
                 RenderDistortion(hdCamera, cmd);
 
-                RenderLowResTransparent(cullingResults, hdCamera, renderContext, cmd);
 
                 StopStereoRendering(cmd, renderContext, camera);
 
@@ -1908,7 +1911,6 @@ namespace UnityEngine.Experimental.Rendering.HDPipeline
                 PushFullScreenLightingDebugTexture(hdCamera, cmd, m_CameraColorBuffer);
             }
 
-            UpsampleTransparent(hdCamera, cmd);
 
             // At this point, m_CameraColorBuffer has been filled by either debug views are regular rendering so we can push it here.
             PushColorPickerDebugTexture(cmd, hdCamera, m_CameraColorBuffer);
