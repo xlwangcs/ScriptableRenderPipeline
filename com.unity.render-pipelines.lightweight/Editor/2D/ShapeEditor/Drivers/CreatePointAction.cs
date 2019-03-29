@@ -1,16 +1,15 @@
 using System;
 using UnityEngine;
-using UnityEditor.Experimental.Rendering.LWRP.GUIFramework;
+using UnityEditor.Experimental.Rendering.LWRP.Path2D.GUIFramework;
 
-namespace UnityEditor.Experimental.Rendering.LWRP
+namespace UnityEditor.Experimental.Rendering.LWRP.Path2D
 {
     internal class CreatePointAction : ClickAction
     {
         private Control m_PointControl;
 
-        public Func<Vector2, Vector3> guiToWorld;
+        public Func<IGUIState, Vector2, Vector3> guiToWorld;
         public Action<int, Vector3> onCreatePoint;
-
         public CreatePointAction(Control pointControl, Control edgeControl) : base(edgeControl, 0, false)
         {
             m_PointControl = pointControl;
@@ -41,9 +40,9 @@ namespace UnityEditor.Experimental.Rendering.LWRP
         private Vector3 GetMousePositionWorld(IGUIState guiState)
         {
             if (guiToWorld != null)
-                return guiToWorld(guiState.mousePosition);
+                return guiToWorld(guiState, guiState.mousePosition);
 
-            return ShapeEditorUtility.GUIToWorld(guiState.mousePosition, hoveredControl.layoutData.forward, hoveredControl.layoutData.position);
+            return guiState.GUIToWorld(guiState.mousePosition, hoveredControl.layoutData.forward, hoveredControl.layoutData.position);
         }
     }
 }
